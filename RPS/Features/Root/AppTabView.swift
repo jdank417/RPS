@@ -15,6 +15,7 @@ enum AppTab: Int, Hashable {
 }
 
 struct AppTabView: View {
+    @Environment(LivePositionStore.self) private var liveStore
     @AppStorage("rps.hasSeenDisclaimer") private var hasSeenDisclaimer = false
     @State private var showDisclaimer = false
     @State private var selectedTab: AppTab = .course
@@ -42,7 +43,21 @@ struct AppTabView: View {
         .onAppear {
             if !hasSeenDisclaimer { showDisclaimer = true }
         }
-        .sheet(isPresented: $showDisclaimer, onDismiss: { hasSeenDisclaimer = true }) {
+        // Ask for location as soon as the app is usable, not only when the
+        // Race tab happens to be opened. The app launches on the Course tab,
+        // where placing a portable mark from the current position is one of
+        // the first things a sailor does - previously that silently had no
+        // fix, and the permission prompt had never even been shown, because
+        // nothing outside Race Mode ever started the receiver.
+        .task {
+            // Held back while the disclaimer is up so the system location
+            // alert doesn't land on top of it.
+            if hasSeenDisclaimer { liveStore.start(userInitiated: false) }
+        }
+        .sheet(isPresented: $showDisclaimer, onDismiss: {
+            hasSeenDisclaimer = true
+            liveStore.start(userInitiated: false)
+        }) {
             DisclaimerView()
         }
     }

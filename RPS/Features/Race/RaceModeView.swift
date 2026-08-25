@@ -182,6 +182,8 @@ private struct InstrumentsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
+                gpsStatusCard
+
                 HStack(spacing: 16) {
                     bigReadout("SOG", value: liveStore.fix?.speedKts.map { String(format: "%.1f", $0) } ?? "—", unit: "kts")
                     bigReadout("COG", value: liveStore.fix?.headingDeg.map { GeoMath.fmtHeading($0) } ?? "—", unit: "true")
@@ -201,6 +203,69 @@ private struct InstrumentsView: View {
             }
             .padding()
         }
+    }
+
+    /// What the GPS receiver is actually doing.
+    ///
+    /// "GPS doesn't work" covers at least three unrelated failures - the
+    /// permission was never requested, it was refused, or it is granted and
+    /// simply hasn't got a fix yet - and they need different fixes. Showing
+    /// which one it is turns an unreproducible report into an obvious one.
+    private var gpsStatusCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("GPS", systemImage: gpsIcon)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(gpsTint)
+                Spacer()
+                Button(liveStore.tracking ? "Stop" : "Start") { liveStore.toggle() }
+                    .font(.subheadline.weight(.medium))
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+
+            Text(liveStore.statusDescription)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let fix = liveStore.fix {
+                Text(String(format: "%.5f, %.5f", fix.lat, fix.lon))
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 14) {
+                    if let acc = fix.accuracyM {
+                        Text(String(format: "±%.0f m", acc)).font(.caption2).foregroundStyle(.secondary)
+                    }
+                    Text("\(liveStore.fixCount) fixes").font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+
+            if liveStore.isDenied {
+                Button {
+                    liveStore.openSettings()
+                } label: {
+                    Label("Open Settings", systemImage: "gear")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var gpsIcon: String {
+        if liveStore.isDenied { return "location.slash.fill" }
+        if liveStore.fix != nil { return "location.fill" }
+        return liveStore.tracking ? "location.circle" : "location.slash"
+    }
+
+    private var gpsTint: Color {
+        if liveStore.isDenied { return .red }
+        return liveStore.fix != nil ? .green : .orange
     }
 
     private var windCard: some View {

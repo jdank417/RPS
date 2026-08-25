@@ -42,6 +42,11 @@ struct CourseBuilderView: View {
                 paletteSection
             }
             .refreshable { await reloadMarks() }
+            // A light tap when a mark lands in the course - the same
+            // confirmation a physical control gives, which matters when the
+            // phone is being used one-handed and half-watched.
+            .sensoryFeedback(.impact(flexibility: .soft), trigger: course.course.count)
+            .animation(.snappy(duration: 0.28, extraBounce: 0.15), value: course.course)
             .navigationTitle(markListName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -200,11 +205,24 @@ struct CourseBuilderView: View {
                         effectiveRounding: course.effectiveRounding(entry),
                         needsPosition: resolvedPosition(entry) == nil
                     )
+                    // A mark slides in from the palette below and lifts back
+                    // out the way it came, rather than the default fade that
+                    // made the list look like it was redrawing itself.
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                        removal: .move(edge: .trailing).combined(with: .opacity)
+                    ))
                     .contentShape(Rectangle())
-                    .onTapGesture { course.cycleEntryRounding(uid: entry.uid) }
+                    .onTapGesture {
+                        withAnimation(.snappy(duration: 0.22, extraBounce: 0.2)) {
+                            course.cycleEntryRounding(uid: entry.uid)
+                        }
+                    }
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
-                            course.removeMark(uid: entry.uid)
+                            withAnimation(.snappy(duration: 0.28, extraBounce: 0.1)) {
+                                course.removeMark(uid: entry.uid)
+                            }
                         } label: {
                             Label("Remove", systemImage: "trash")
                         }
@@ -217,14 +235,20 @@ struct CourseBuilderView: View {
                         }
                         .tint(.orange)
                         Button {
-                            course.startUid = entry.uid
+                            withAnimation(.snappy(duration: 0.28, extraBounce: 0.2)) {
+                                course.startUid = entry.uid
+                            }
                         } label: {
                             Label("Start", systemImage: "flag.checkered")
                         }
                         .tint(.green)
                     }
                 }
-                .onMove { course.moveMark(fromOffsets: $0, toOffset: $1) }
+                .onMove { from, to in
+                    withAnimation(.snappy(duration: 0.3, extraBounce: 0.15)) {
+                        course.moveMark(fromOffsets: from, toOffset: to)
+                    }
+                }
             }
         } header: {
             Text("Course")
@@ -242,19 +266,41 @@ struct CourseBuilderView: View {
             } else {
                 ForEach(course.activeMarks) { mark in
                     Button {
-                        course.addMark(mark)
+                        withAnimation(.snappy(duration: 0.28, extraBounce: 0.18)) {
+                            course.addMark(mark)
+                        }
                     } label: {
                         HStack(spacing: 12) {
                             MarkBadge(code: mark.code, govtLight: mark.govtLight, portable: mark.portable, size: 28)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(mark.name).foregroundStyle(.primary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                // Lead with the code. Several real marks in
+                                // these lists share a name - MBSA list A has
+                                // two "Boston Approach Buoy" (J and L), list
+                                // C has three "Weymouth Fore River Channel
+                                // Buoy" - so a name-first row reads as
+                                // duplicated entries when it is actually
+                                // listing different buoys. The code is what
+                                // tells them apart, and it is also what the
+                                // RC posts on the board.
+                                HStack(spacing: 6) {
+                                    Text(mark.code)
+                                        .font(.body.weight(.semibold))
+                                        .foregroundStyle(.primary)
+                                    Text(mark.name)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
                                 if mark.lat == nil || mark.lon == nil {
                                     Text("Portable — no charted position").font(.caption2).foregroundStyle(.orange)
+                                } else if let light = mark.govtLight, !light.isEmpty {
+                                    Text(light).font(.caption2).foregroundStyle(.tertiary)
                                 }
                             }
-                            Spacer()
+                            Spacer(minLength: 8)
                             Image(systemName: "plus.circle.fill").foregroundStyle(.tint)
                         }
+                        .padding(.vertical, 2)
                     }
                 }
             }
@@ -268,9 +314,17 @@ struct CourseBuilderView: View {
             }
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(course.legComputation.legs.count) legs").font(.caption).foregroundStyle(.secondary)
+                    Text("\(course.legComputation.legs.count) legs")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .contentTransition(.numericText())
                     Text(String(format: "%.2f nm total", course.legComputation.totalNm))
                         .font(.headline)
+                        .monospacedDigit()
+                        // Digits roll rather than cross-fade as marks are
+                        // added, so the total reads as the same number
+                        // changing instead of a new label appearing.
+                        .contentTransition(.numericText())
                 }
                 Spacer()
                 Button {
