@@ -22,13 +22,14 @@ struct CourseBuilderView: View {
     @State private var placingEntry: CourseEntry?
     @State private var isLoadingMarks = false
     @State private var errorMessage: String?
-    @State private var switchingListId: UUID?
 
     var onPlotCourse: (() -> Void)?
 
     var body: some View {
         NavigationStack {
             List {
+                raceSection
+
                 if let message = course.statusMessage {
                     Section {
                         Label(message, systemImage: course.statusIsError ? "exclamationmark.triangle.fill" : "info.circle")
@@ -40,20 +41,11 @@ struct CourseBuilderView: View {
                 courseSection
                 paletteSection
             }
+            .refreshable { await reloadMarks() }
             .navigationTitle(markListName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarLeading) {
-                    Button {
-                        showRCClubPicker = true
-                    } label: {
-                        Label("RC Club", systemImage: "flag.2.crossed")
-                    }
-                    Button {
-                        showMarkListPicker = true
-                    } label: {
-                        Label("Mark Lists", systemImage: "list.bullet.rectangle")
-                    }
                     if !course.course.isEmpty {
                         EditButton()
                     }
@@ -80,21 +72,15 @@ struct CourseBuilderView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) { summaryBar }
+            // Same picker for both entry points; "Switch mark list" just
+            // opens it already on the current club's lists. Pointing that
+            // button at the *home* club's lists, as it used to, was wrong the
+            // moment a different club was running the race.
             .sheet(isPresented: $showMarkListPicker) {
-                MarkListPickerSheet(
-                    markLists: appState.bootstrap?.markLists ?? [],
-                    selectedId: activeMarkListId
-                ) { list in
-                    Task { await switchList(to: list) }
-                }
+                rcPicker(initialClub: currentRCClub)
             }
             .sheet(isPresented: $showRCClubPicker) {
-                RCClubPickerSheet { club, list, marks in
-                    course.setRCClub(slug: club.slug, name: club.name)
-                    course.setActiveMarks(marks)
-                    course.setMarkListId(list.id)
-                    course.restoreFor(markListId: list.id)
-                }
+                rcPicker(initialClub: nil)
             }
             .sheet(isPresented: $showVariationSheet) {
                 VariationSheet(variationDeg: course.variationDeg) { course.setVariationDeg($0) }
@@ -116,7 +102,89 @@ struct CourseBuilderView: View {
         }
     }
 
+    // MARK: - Pickers
+
+    /// The club currently running the race: the explicitly-chosen RC club if
+    /// there is one, otherwise the sailor's own club from bootstrap.
+    private var currentRCClub: YachtClub? {
+        if let slug = course.rcClubSlug {
+            return appState.bootstrap?.clubs.first { $0.slug == slug }
+        }
+        return appState.bootstrap?.club
+    }
+
+    private func rcPicker(initialClub: YachtClub?) -> some View {
+        RCClubPickerSheet(
+            currentClubSlug: course.rcClubSlug ?? appState.bootstrap?.club?.slug,
+            currentListId: activeMarkListId,
+            initialClub: initialClub
+        ) { club, list, marks in
+            course.setRCClub(slug: club.slug, name: club.name, listName: list.name)
+            // Marks from another club aren't meaningful in this one, so
+            // setActiveMarks clears the course unless it's the same list;
+            // restoreFor then brings back a course saved against this list.
+            let sameList = course.activeMarkListId == list.id
+            course.setActiveMarks(marks, keepCourse: sameList)
+            course.setMarkListId(list.id)
+            if !sameList { course.restoreFor(markListId: list.id) }
+        }
+    }
+
     // MARK: - Sections
+
+    /// Who is running the race, and off which list. Deliberately the first
+    /// thing in the builder rather than a toolbar icon: picking the wrong
+    /// club's marks is the one mistake here that produces a plausible-looking
+    /// course made of the wrong buoys, so it needs to be visible without
+    /// being looked for.
+    private var raceSection: some View {
+        Section {
+            Button {
+                showRCClubPicker = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "flag.2.crossed.fill")
+                        .font(.system(size: 17))
+                        .foregroundStyle(.tint)
+                        .frame(width: 30)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("RACE COMMITTEE")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.secondary)
+                            .tracking(1)
+                        Text(course.rcClubName ?? appState.bootstrap?.club?.name ?? "Choose a club")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        if let listName = course.rcListName ?? bootstrapListName {
+                            Text(listName)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.vertical, 8)
+            }
+
+            Button {
+                showMarkListPicker = true
+            } label: {
+                Label("Switch mark list", systemImage: "list.bullet.rectangle")
+                    .font(.subheadline)
+            }
+        } footer: {
+            Text("Set which club is running today's race — their marks and series lists load here. This is separate from your home club.")
+        }
+    }
+
+    private var bootstrapListName: String? {
+        appState.bootstrap?.markLists.first { $0.id == activeMarkListId }?.name
+    }
 
     private var courseSection: some View {
         Section {
@@ -224,33 +292,51 @@ struct CourseBuilderView: View {
 
     // MARK: - Data loading
 
+    /// The *list* name, not the club's - the club is shown separately in the
+    /// race section, and a title reading "Boston Yacht Club" told the sailor
+    /// nothing about which of that club's lists was loaded.
     private var markListName: String {
-        if let rcName = course.rcClubName {
-            return rcName
-        }
-        return appState.bootstrap?.markLists.first { $0.id == activeMarkListId }?.name ?? "Course Builder"
+        course.rcListName ?? bootstrapListName ?? "Course Builder"
     }
 
+    /// Prefers whatever list the store actually has loaded. Falling back to
+    /// the bootstrap default unconditionally meant that after switching to
+    /// another club's list, the title still named the old one.
     private var activeMarkListId: UUID? {
-        appState.bootstrap?.selectedMarkListId
+        course.activeMarkListId ?? appState.bootstrap?.selectedMarkListId
     }
 
     private func loadInitialMarksIfNeeded() async {
         guard course.activeMarks.isEmpty, let bootstrap = appState.bootstrap else { return }
         course.setActiveMarks(bootstrap.marks)
+        course.setMarkListId(bootstrap.selectedMarkListId)
         course.restoreFor(markListId: bootstrap.selectedMarkListId)
     }
 
-    private func switchList(to list: MarkList) async {
-        switchingListId = list.id
+    /// Pull to refresh: re-fetches the loaded list's marks past the cache, so
+    /// a mark a club admin moved in the web console shows up here.
+    private func reloadMarks() async {
+        guard let id = activeMarkListId else {
+            await appState.hardRefresh()
+            return
+        }
+        let list = appState.bootstrap?.markLists.first { $0.id == id }
+            ?? MarkList(id: id, name: markListName, slug: "", scope: .club, ownerClubId: nil, sourceLabel: nil)
+        await load(list: list, forceRefresh: true)
+    }
+
+    private func load(list: MarkList, forceRefresh: Bool) async {
         isLoadingMarks = true
         errorMessage = nil
-        defer { isLoadingMarks = false; switchingListId = nil }
+        defer { isLoadingMarks = false }
         do {
-            let marks = try await appState.selectMarkList(list)
-            course.setActiveMarks(marks)
+            let marks = try await appState.selectMarkList(list, forceRefresh: forceRefresh)
+            // Refreshing the list we already have must not wipe the course
+            // the sailor is mid-way through building.
+            let sameList = course.activeMarkListId == list.id
+            course.setActiveMarks(marks, keepCourse: sameList)
             course.setMarkListId(list.id)
-            course.restoreFor(markListId: list.id)
+            if !sameList { course.restoreFor(markListId: list.id) }
         } catch {
             errorMessage = error.localizedDescription
         }

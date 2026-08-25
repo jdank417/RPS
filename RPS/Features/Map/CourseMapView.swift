@@ -17,11 +17,31 @@ struct CourseMapView: View {
     var pin: GeoMath.LatLon? = nil
     var committee: GeoMath.LatLon? = nil
     var highlightedLegIndex: Int? = nil
+    /// Extra bottom inset so overlaid chrome (the leg toolbar in Race Mode)
+    /// never sits on top of the course itself.
+    var bottomContentInset: CGFloat = 0
 
     @State private var camera: MapCameraPosition = .automatic
-    @State private var didInitialFit = false
+    /// The course this camera was last framed for. Re-framing keys off this
+    /// rather than a bool, so a course that *changes* re-frames instead of
+    /// leaving the sailor looking at the water the last course was on.
+    @State private var fittedSignature: String?
+    @State private var followBoat = false
+    @State private var hybrid = false
 
     private var placedPoints: [MapPoint] { mapPoints.compactMap { $0 } }
+
+    /// Identifies the current set of plotted positions. Coordinates are
+    /// rounded before hashing so GPS jitter on a placed portable mark doesn't
+    /// yank the camera back to "fit" every second.
+    private var courseSignature: String {
+        var parts = placedPoints.map { "\($0.label):\(rounded($0.lat)),\(rounded($0.lon))" }
+        if let pin { parts.append("pin:\(rounded(pin.lat)),\(rounded(pin.lon))") }
+        if let committee { parts.append("rc:\(rounded(committee.lat)),\(rounded(committee.lon))") }
+        return parts.joined(separator: "|")
+    }
+
+    private func rounded(_ v: Double) -> Int { Int((v * 10_000).rounded()) }
 
     var body: some View {
         Map(position: $camera) {
@@ -31,13 +51,65 @@ struct CourseMapView: View {
             markAnnotations
             boatAnnotation
         }
+        .mapStyle(hybrid ? .hybrid(elevation: .flat) : .standard(elevation: .flat, pointsOfInterest: .excludingAll))
         .mapControls {
             MapCompass()
             MapScaleView()
         }
-        .onAppear { fitIfNeeded() }
-        .onChange(of: placedPoints.count) { _, _ in fitIfNeeded() }
+        .safeAreaPadding(.bottom, bottomContentInset)
+        .overlay(alignment: .topTrailing) { mapButtons }
+        .onAppear { fitIfCourseChanged() }
+        .onChange(of: courseSignature) { _, _ in fitIfCourseChanged() }
+        .onChange(of: liveFix) { _, fix in
+            guard followBoat, let fix else { return }
+            camera = .camera(MapCamera(centerCoordinate: fix.coordinate, distance: 1_500, heading: fix.headingDeg ?? 0))
+        }
     }
+
+    // MARK: - Controls
+
+    private var mapButtons: some View {
+        VStack(spacing: 8) {
+            mapButton(
+                systemImage: followBoat ? "location.fill" : "location",
+                isOn: followBoat,
+                label: "Follow boat"
+            ) {
+                followBoat.toggle()
+                if followBoat, let fix = liveFix {
+                    camera = .camera(MapCamera(centerCoordinate: fix.coordinate, distance: 1_500, heading: fix.headingDeg ?? 0))
+                }
+            }
+            .disabled(liveFix == nil)
+
+            mapButton(systemImage: "arrow.up.left.and.arrow.down.right", isOn: false, label: "Fit course") {
+                followBoat = false
+                fitToCourse()
+            }
+
+            mapButton(systemImage: hybrid ? "globe.americas.fill" : "map", isOn: hybrid, label: "Satellite") {
+                hybrid.toggle()
+            }
+        }
+        .padding(.top, 8)
+        .padding(.trailing, 12)
+    }
+
+    private func mapButton(systemImage: String, isOn: Bool, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .semibold))
+                // 44pt is Apple's minimum comfortable tap target, and this is
+                // a control pressed on a moving boat.
+                .frame(width: 44, height: 44)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .foregroundStyle(isOn ? Color.accentColor : Color.primary)
+        }
+        .accessibilityLabel(label)
+        .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
+    }
+
+    // MARK: - Map content
 
     @MapContentBuilder
     private var courseLineContent: some MapContent {
@@ -53,7 +125,7 @@ struct CourseMapView: View {
            let from = placedPoints[safe: highlighted],
            let to = placedPoints[safe: highlighted + 1] {
             MapPolyline(coordinates: [from.coordinate, to.coordinate])
-                .stroke(Color.orange, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                .stroke(Color.orange, style: StrokeStyle(lineWidth: 6, lineCap: .round))
         }
     }
 
@@ -81,7 +153,7 @@ struct CourseMapView: View {
                     portable: point.portable,
                     rounding: point.rounding,
                     isStart: point.isStart,
-                    size: 30
+                    size: 32
                 )
             }
         }
@@ -106,23 +178,42 @@ struct CourseMapView: View {
         }
     }
 
-    private func fitIfNeeded() {
-        guard !didInitialFit else { return }
+    // MARK: - Camera
+
+    private func fitIfCourseChanged() {
+        let signature = courseSignature
+        guard !signature.isEmpty, signature != fittedSignature else { return }
+        guard !followBoat else { return }
+        fittedSignature = signature
+        fitToCourse()
+    }
+
+    private func fitToCourse() {
         var coords = placedPoints.map(\.coordinate)
         if let pin { coords.append(pin.coordinate) }
         if let committee { coords.append(committee.coordinate) }
         guard !coords.isEmpty else { return }
-        didInitialFit = true
+
         if coords.count == 1 {
-            camera = .region(MKCoordinateRegion(center: coords[0], span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)))
+            camera = .region(MKCoordinateRegion(
+                center: coords[0],
+                span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
+            ))
             return
         }
+
         let lats = coords.map(\.latitude)
         let lons = coords.map(\.longitude)
-        let center = CLLocationCoordinate2D(latitude: (lats.min()! + lats.max()!) / 2, longitude: (lons.min()! + lons.max()!) / 2)
+        let center = CLLocationCoordinate2D(
+            latitude: (lats.min()! + lats.max()!) / 2,
+            longitude: (lons.min()! + lons.max()!) / 2
+        )
+        // 1.9x rather than a tight fit: marks sitting hard against the screen
+        // edge (or under the leg toolbar) read as a course running off the
+        // map. The floor keeps a two-mark course from zooming absurdly close.
         let span = MKCoordinateSpan(
-            latitudeDelta: max((lats.max()! - lats.min()!) * 1.6, 0.01),
-            longitudeDelta: max((lons.max()! - lons.min()!) * 1.6, 0.01)
+            latitudeDelta: max((lats.max()! - lats.min()!) * 1.9, 0.012),
+            longitudeDelta: max((lons.max()! - lons.min()!) * 1.9, 0.012)
         )
         camera = .region(MKCoordinateRegion(center: center, span: span))
     }
