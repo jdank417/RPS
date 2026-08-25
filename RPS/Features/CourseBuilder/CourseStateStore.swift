@@ -15,6 +15,9 @@
 
 import Foundation
 import Observation
+// `Array.move(fromOffsets:toOffset:)`, used by drag-to-reorder in the course
+// builder's list, is a SwiftUI extension rather than a Foundation one.
+import SwiftUI
 
 @Observable
 @MainActor
@@ -293,11 +296,10 @@ final class CourseStateStore {
     /// status message) if the mark has no charted position.
     @discardableResult
     func setStartFromMark(_ mark: Mark) -> Bool {
-        guard let lat = mark.lat, let lon = mark.lon else {
+        guard mark.lat != nil, mark.lon != nil else {
             setStatus("\(mark.code) has no charted position — pick a fixed mark, or enter a position instead.", isError: true)
             return false
         }
-        _ = lat; _ = lon
 
         let existing = positionTargetUid.flatMap { uid in course.first(where: { $0.uid == uid }) } ?? findStartTargetEntry()
 

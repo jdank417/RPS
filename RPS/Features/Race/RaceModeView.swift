@@ -262,4 +262,5 @@ private struct StartLineView: View {
         .environment(RaceViewModel(courseStore: courseStore, liveStore: liveStore, windService: wind))
         .environment(liveStore)
         .environment(courseStore)
+        .environment(StartSequenceViewModel())
 }

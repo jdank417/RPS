@@ -106,9 +106,11 @@ struct BurgeeBadge: View {
     }
 
     private var color: Color {
-        let hash = abs(club.slug.hashValue)
         let hues: [Color] = [.blue, .teal, .indigo, .cyan, .mint, .purple]
-        return hues[hash % hues.count]
+        // `abs(Int.min)` traps, so wrap into a non-negative index instead of
+        // taking the absolute value of a hash that could be anything.
+        let index = ((club.slug.hashValue % hues.count) + hues.count) % hues.count
+        return hues[index]
     }
 }
 

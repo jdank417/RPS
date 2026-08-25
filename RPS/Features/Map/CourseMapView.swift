@@ -25,47 +25,11 @@ struct CourseMapView: View {
 
     var body: some View {
         Map(position: $camera) {
-            if placedPoints.count >= 2 {
-                MapPolyline(coordinates: placedPoints.map(\.coordinate))
-                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-            }
-
-            if let highlighted = highlightedLegIndex,
-               let from = placedPoints[safe: highlighted],
-               let to = placedPoints[safe: highlighted + 1] {
-                MapPolyline(coordinates: [from.coordinate, to.coordinate])
-                    .stroke(Color.orange, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-            }
-
-            if let pin, let committee {
-                MapPolyline(coordinates: [pin.coordinate, committee.coordinate])
-                    .stroke(.primary, style: StrokeStyle(lineWidth: 2, dash: [1, 6]))
-                Annotation("Pin", coordinate: pin.coordinate) {
-                    lineEndMarker(label: "Pin", systemImage: "mappin")
-                }
-                Annotation("RC", coordinate: committee.coordinate) {
-                    lineEndMarker(label: "RC", systemImage: "flag.fill")
-                }
-            }
-
-            ForEach(placedPoints) { point in
-                Annotation(point.name, coordinate: point.coordinate) {
-                    MarkBadge(
-                        code: point.label,
-                        govtLight: point.govtLight,
-                        portable: point.portable,
-                        rounding: point.rounding,
-                        isStart: point.isStart,
-                        size: 30
-                    )
-                }
-            }
-
-            if let liveFix {
-                Annotation("Boat", coordinate: liveFix.coordinate) {
-                    BoatMarker(headingDeg: liveFix.headingDeg)
-                }
-            }
+            courseLineContent
+            highlightedLegContent
+            startLineContent
+            markAnnotations
+            boatAnnotation
         }
         .mapControls {
             MapCompass()
@@ -73,6 +37,63 @@ struct CourseMapView: View {
         }
         .onAppear { fitIfNeeded() }
         .onChange(of: placedPoints.count) { _, _ in fitIfNeeded() }
+    }
+
+    @MapContentBuilder
+    private var courseLineContent: some MapContent {
+        if placedPoints.count >= 2 {
+            MapPolyline(coordinates: placedPoints.map(\.coordinate))
+                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+        }
+    }
+
+    @MapContentBuilder
+    private var highlightedLegContent: some MapContent {
+        if let highlighted = highlightedLegIndex,
+           let from = placedPoints[safe: highlighted],
+           let to = placedPoints[safe: highlighted + 1] {
+            MapPolyline(coordinates: [from.coordinate, to.coordinate])
+                .stroke(Color.orange, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+        }
+    }
+
+    @MapContentBuilder
+    private var startLineContent: some MapContent {
+        if let pin, let committee {
+            MapPolyline(coordinates: [pin.coordinate, committee.coordinate])
+                .stroke(.primary, style: StrokeStyle(lineWidth: 2, dash: [1, 6]))
+            Annotation("Pin", coordinate: pin.coordinate) {
+                lineEndMarker(label: "Pin", systemImage: "mappin")
+            }
+            Annotation("RC", coordinate: committee.coordinate) {
+                lineEndMarker(label: "RC", systemImage: "flag.fill")
+            }
+        }
+    }
+
+    @MapContentBuilder
+    private var markAnnotations: some MapContent {
+        ForEach(placedPoints) { point in
+            Annotation(point.name, coordinate: point.coordinate) {
+                MarkBadge(
+                    code: point.label,
+                    govtLight: point.govtLight,
+                    portable: point.portable,
+                    rounding: point.rounding,
+                    isStart: point.isStart,
+                    size: 30
+                )
+            }
+        }
+    }
+
+    @MapContentBuilder
+    private var boatAnnotation: some MapContent {
+        if let liveFix {
+            Annotation("Boat", coordinate: liveFix.coordinate) {
+                BoatMarker(headingDeg: liveFix.headingDeg)
+            }
+        }
     }
 
     private func lineEndMarker(label: String, systemImage: String) -> some View {
