@@ -33,8 +33,15 @@ struct MapPoint: Equatable, Identifiable {
     var portable: Bool
     var rounding: Rounding?
     var isStart: Bool
+    /// Position in the sailed sequence. This is the identity: a course can
+    /// legitimately visit the same mark more than once - a windward mark
+    /// rounded twice, a start that is also the finish, or every mark after
+    /// the first when "twice around" is up - and deriving the id from the
+    /// mark's code and position instead gave those occurrences *identical*
+    /// ids, which makes SwiftUI's ForEach render them as duplicates.
+    var seq: Int = 0
 
-    var id: String { "\(label)-\(lat)-\(lon)-\(isStart)" }
+    var id: Int { seq }
 }
 
 struct CourseComputation: Equatable {
@@ -96,7 +103,8 @@ func computeCourseLegs(_ course: [CourseEntry], opts: CourseLegOptions) -> Cours
                     govtLight: entry.mark.govtLight,
                     portable: entry.mark.portable,
                     rounding: effectiveRounding(entry, defaultRounding: opts.defaultRounding),
-                    isStart: isStartEntry(entry, index: i, startUid: opts.startUid)
+                    isStart: isStartEntry(entry, index: i, startUid: opts.startUid),
+                    seq: i
                 )
             }
         )

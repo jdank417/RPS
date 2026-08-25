@@ -12,6 +12,7 @@
 import Foundation
 import CoreLocation
 import Observation
+import UIKit
 
 struct LiveFix: Equatable {
     var lat: Double
@@ -37,6 +38,14 @@ final class LivePositionStore: NSObject {
     var tracking = false
     var error: String?
 
+    /// Mirrored into observable state because `CLLocationManager`'s own
+    /// property isn't observable - a view reading it directly would never
+    /// re-render when the sailor grants or revokes permission.
+    private(set) var authorizationStatus: CLAuthorizationStatus = .notDetermined
+    /// Counts fixes received this session. Zero while authorised and
+    /// tracking is the specific symptom of "permission fine, no signal".
+    private(set) var fixCount = 0
+
     private let manager = CLLocationManager()
 
     var moving: Bool {
@@ -45,6 +54,26 @@ final class LivePositionStore: NSObject {
     }
 
     var coordinate: CLLocationCoordinate2D? { fix?.coordinate }
+
+    var isDenied: Bool {
+        authorizationStatus == .denied || authorizationStatus == .restricted
+    }
+
+    /// Plain-English account of what the receiver is actually doing, so a
+    /// sailor (or whoever they report it to) can tell "permission refused"
+    /// apart from "waiting for a fix" apart from "never asked" - three very
+    /// different problems that otherwise all look like "GPS doesn't work".
+    var statusDescription: String {
+        switch authorizationStatus {
+        case .notDetermined: return "Permission not requested yet"
+        case .denied: return "Permission denied — enable Location in Settings"
+        case .restricted: return "Location restricted on this device"
+        case .authorizedWhenInUse, .authorizedAlways:
+            if !tracking { return "Allowed — GPS off" }
+            return fixCount == 0 ? "Allowed — waiting for first fix…" : "Allowed — tracking"
+        @unknown default: return "Unknown authorization state"
+        }
+    }
 
     /// Set when the sailor taps "Stop GPS", so returning to the Race tab
     /// doesn't quietly switch it back on behind them.
@@ -55,6 +84,7 @@ final class LivePositionStore: NSObject {
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         manager.activityType = .otherNavigation
+        authorizationStatus = manager.authorizationStatus
         // CoreLocation pauses updates on its own when it decides you have
         // stopped moving. On a boat sitting head-to-wind before a start, or
         // parked in a lull, that is exactly when the sailor still needs a
@@ -69,7 +99,8 @@ final class LivePositionStore: NSObject {
         if userInitiated { stoppedDeliberately = false }
         guard !tracking else { return }
 
-        switch manager.authorizationStatus {
+        authorizationStatus = manager.authorizationStatus
+        switch authorizationStatus {
         case .notDetermined:
             // Record the intent, then wait: calling startUpdatingLocation()
             // before the authorization callback lands is unreliable, and
@@ -96,6 +127,13 @@ final class LivePositionStore: NSObject {
         tracking = false
     }
 
+    /// Opens this app's page in Settings, the only place a denied location
+    /// permission can be granted again.
+    func openSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
+    }
+
     func toggle() {
         tracking ? stop() : start()
     }
@@ -115,6 +153,7 @@ extension LivePositionStore: CLLocationManagerDelegate {
                 speedKts: location.speed >= 0 ? location.speed * 1.943844 : nil,
                 at: location.timestamp
             )
+            self.fixCount += 1
             self.error = nil
         }
     }
@@ -127,6 +166,7 @@ extension LivePositionStore: CLLocationManagerDelegate {
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor in
+            self.authorizationStatus = manager.authorizationStatus
             switch manager.authorizationStatus {
             case .authorizedWhenInUse, .authorizedAlways:
                 // `tracking` was set by start() before it returned to wait on

@@ -115,17 +115,28 @@ struct CourseMapView: View {
     private var courseLineContent: some MapContent {
         if placedPoints.count >= 2 {
             MapPolyline(coordinates: placedPoints.map(\.coordinate))
-                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                .stroke(
+                    Color.accentColor.opacity(0.55),
+                    style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round)
+                )
         }
     }
 
+    /// The active leg, drawn over the course line.
+    ///
+    /// Wider than the base line and fully opaque on purpose: at 6pt over a
+    /// 3pt line the blue showed through along the edges and at the joins,
+    /// which read as two lines fighting rather than one leg picked out of
+    /// the course. A round cap at 8pt covers the base stroke and its joins
+    /// completely, and the base line being semi-transparent keeps the
+    /// contrast between "the course" and "the leg you are sailing".
     @MapContentBuilder
     private var highlightedLegContent: some MapContent {
         if let highlighted = highlightedLegIndex,
            let from = placedPoints[safe: highlighted],
            let to = placedPoints[safe: highlighted + 1] {
             MapPolyline(coordinates: [from.coordinate, to.coordinate])
-                .stroke(Color.orange, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                .stroke(Color.orange, style: StrokeStyle(lineWidth: 8, lineCap: .round, lineJoin: .round))
         }
     }
 
