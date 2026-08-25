@@ -40,11 +40,14 @@ struct CourseBuilderView: View {
             .navigationTitle(markListName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItemGroup(placement: .topBarLeading) {
                     Button {
                         showMarkListPicker = true
                     } label: {
                         Label("Mark Lists", systemImage: "list.bullet.rectangle")
+                    }
+                    if !course.course.isEmpty {
+                        EditButton()
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
