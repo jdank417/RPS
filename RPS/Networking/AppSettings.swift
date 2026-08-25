@@ -23,10 +23,7 @@ final class AppSettings {
 
     private let defaults: UserDefaults
 
-    /// The API's base URL, e.g. "https://api.example.com". Empty until the
-    /// sailor (or the person setting up their boat's phone) fills it in —
-    /// there is no hardcoded guess, since the backend's deployed address
-    /// isn't known at build time.
+    /// The API's base URL, hardcoded to the production backend.
     var apiBaseURLString: String {
         didSet { defaults.set(apiBaseURLString, forKey: Keys.apiBaseURL) }
     }
@@ -58,7 +55,7 @@ final class AppSettings {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        self.apiBaseURLString = defaults.string(forKey: Keys.apiBaseURL) ?? ""
+        self.apiBaseURLString = defaults.string(forKey: Keys.apiBaseURL) ?? "https://rps-admin-backend.onrender.com"
         self.variationDeg = defaults.object(forKey: Keys.variationDeg) as? Double ?? -14.6
         self.useMagnetic = defaults.object(forKey: Keys.useMagnetic) as? Bool ?? false
     }

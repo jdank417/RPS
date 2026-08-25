@@ -61,8 +61,8 @@ struct StartSequenceView: View {
         VStack(spacing: 16) {
             HStack(spacing: 16) {
                 bigButton("Sync", systemImage: "arrow.triangle.2.circlepath") { sequence.sync() }
-                bigButton("+1:00", systemImage: "goforward.plus") { sequence.bump(60) }
-                bigButton("-1:00", systemImage: "gobackward.minus") { sequence.bump(-60) }
+                bigButton("+1:00", systemImage: "goforward.plus") { sequence.bump(seconds: 60) }
+                bigButton("-1:00", systemImage: "gobackward.minus") { sequence.bump(seconds: -60) }
             }
             Button(role: .destructive) {
                 sequence.stop()

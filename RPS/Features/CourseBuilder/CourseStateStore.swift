@@ -31,11 +31,19 @@ final class CourseStateStore {
         var committed: Bool
         var variationDeg: Double
         var markListId: UUID?
+        var rcClubSlug: String?
+        var rcClubName: String?
     }
 
     private static let cacheKey = "rps.cache.course"
     private var uidCounter = 0
     private var markListId: UUID?
+    
+    /// The RC club slug and name — persisted so the sailor knows which club's
+    /// marks they're working with across app restarts. Not the same as the
+    /// sailor's home club.
+    var rcClubSlug: String?
+    var rcClubName: String?
 
     var activeMarks: [Mark] = []
     var course: [CourseEntry] = []
@@ -85,7 +93,8 @@ final class CourseStateStore {
     func persist() {
         let snapshot = Persisted(
             course: course, defaultRounding: defaultRounding, twiceAround: twiceAround,
-            startUid: startUid, committed: committed, variationDeg: variationDeg, markListId: markListId
+            startUid: startUid, committed: committed, variationDeg: variationDeg, markListId: markListId,
+            rcClubSlug: rcClubSlug, rcClubName: rcClubName
         )
         guard !snapshot.course.isEmpty else {
             UserDefaults.standard.removeObject(forKey: Self.cacheKey)
@@ -125,12 +134,20 @@ final class CourseStateStore {
         startUid = s.startUid
         committed = s.committed
         variationDeg = s.variationDeg
+        rcClubSlug = s.rcClubSlug
+        rcClubName = s.rcClubName
         uidCounter = s.course.map(\.uid).max() ?? 0
         return true
     }
 
     func setMarkListId(_ id: UUID?) {
         markListId = id
+    }
+    
+    func setRCClub(slug: String, name: String) {
+        rcClubSlug = slug
+        rcClubName = name
+        persist()
     }
 
     // MARK: - List switching

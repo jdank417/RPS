@@ -11,7 +11,7 @@
 import SwiftUI
 
 struct RaceModeView: View {
-    private enum Segment: String, CaseIterable, Identifiable {
+    enum Segment: String, CaseIterable, Identifiable {
         case leg = "Leg"
         case instruments = "Instruments"
         case start = "Start Line"
@@ -22,12 +22,12 @@ struct RaceModeView: View {
 
     @Environment(RaceViewModel.self) private var race
     @Environment(LivePositionStore.self) private var liveStore
-    @State private var segment: Segment = .countdown
+    @Binding var selectedSegment: Segment
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Picker("View", selection: $segment) {
+                Picker("View", selection: $selectedSegment) {
                     ForEach(Segment.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
@@ -42,7 +42,7 @@ struct RaceModeView: View {
                 }
 
                 Group {
-                    switch segment {
+                    switch selectedSegment {
                     case .leg: LegNavigatorView()
                     case .instruments: InstrumentsView()
                     case .start: StartLineView()
@@ -70,14 +70,75 @@ struct RaceModeView: View {
     }
 
     private var raceMap: some View {
-        CourseMapView(
-            mapPoints: race.courseStore.legComputation.mapPoints,
-            liveFix: liveStore.fix,
-            pin: race.pin,
-            committee: race.committee,
-            highlightedLegIndex: race.courseStore.currentLegIndex
-        )
-        .ignoresSafeArea(edges: .bottom)
+        ZStack(alignment: .bottom) {
+            CourseMapView(
+                mapPoints: race.courseStore.legComputation.mapPoints,
+                liveFix: liveStore.fix,
+                pin: race.pin,
+                committee: race.committee,
+                highlightedLegIndex: race.courseStore.currentLegIndex
+            )
+            .ignoresSafeArea(edges: .bottom)
+            
+            if !race.courseStore.legComputation.legs.isEmpty {
+                legToolbar
+            }
+        }
+    }
+    
+    private var legToolbar: some View {
+        VStack(spacing: 0) {
+            if let currentIndex = race.courseStore.currentLegIndex,
+               let leg = race.courseStore.legComputation.legs[safe: currentIndex] {
+                HStack(spacing: 12) {
+                    Button {
+                        if currentIndex > 0 {
+                            race.courseStore.setCurrentLeg(currentIndex - 1)
+                        }
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.title3.weight(.semibold))
+                            .frame(width: 44, height: 44)
+                    }
+                    .disabled(currentIndex == 0)
+                    
+                    VStack(spacing: 4) {
+                        Text("LEG \(leg.legIndex + 1)").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+                        Text("\(leg.fromLabel) → \(leg.toLabel)")
+                            .font(.subheadline.weight(.semibold))
+                        HStack(spacing: 16) {
+                            if let hdg = leg.magHdg ?? leg.trueHdg {
+                                Label(GeoMath.fmtHeading(hdg), systemImage: "location.north.fill")
+                                    .font(.caption.weight(.medium))
+                            }
+                            if let dist = leg.distNm {
+                                Label(String(format: "%.2f nm", dist), systemImage: "ruler")
+                                    .font(.caption.weight(.medium))
+                            }
+                        }
+                        .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    
+                    Button {
+                        if currentIndex < race.courseStore.legComputation.legs.count - 1 {
+                            race.courseStore.setCurrentLeg(currentIndex + 1)
+                        }
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.title3.weight(.semibold))
+                            .frame(width: 44, height: 44)
+                    }
+                    .disabled(currentIndex == race.courseStore.legComputation.legs.count - 1)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .shadow(radius: 8)
+                .padding()
+            }
+        }
     }
 }
 
@@ -254,11 +315,18 @@ private struct StartLineView: View {
     }
 }
 
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
+}
+
 #Preview {
+    @Previewable @State var segment: RaceModeView.Segment = .countdown
     let courseStore = CourseStateStore()
     let liveStore = LivePositionStore()
     let wind = WindService()
-    RaceModeView()
+    RaceModeView(selectedSegment: $segment)
         .environment(RaceViewModel(courseStore: courseStore, liveStore: liveStore, windService: wind))
         .environment(liveStore)
         .environment(courseStore)

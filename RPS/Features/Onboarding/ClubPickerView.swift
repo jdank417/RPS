@@ -38,30 +38,44 @@ struct ClubPickerView: View {
                         Text(errorMessage).foregroundStyle(.red).font(.footnote)
                     }
                 }
-                ForEach(filtered) { club in
-                    Button {
-                        Task { await choose(club) }
-                    } label: {
-                        HStack(spacing: 14) {
-                            BurgeeBadge(club: club)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(club.name)
-                                    .font(.body.weight(.medium))
-                                    .foregroundStyle(.primary)
-                                if let region = club.region {
-                                    Text([region, club.country].compactMap { $0 }.joined(separator: ", "))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                Section {
+                    ForEach(filtered) { club in
+                        Button {
+                            Task { await choose(club) }
+                        } label: {
+                            HStack(spacing: 14) {
+                                BurgeeBadge(club: club)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(club.name)
+                                        .font(.body.weight(.medium))
+                                        .foregroundStyle(.primary)
+                                    if let region = club.region {
+                                        Text([region, club.country].compactMap { $0 }.joined(separator: ", "))
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer()
+                                if selecting?.id == club.id {
+                                    ProgressView()
                                 }
                             }
-                            Spacer()
-                            if selecting?.id == club.id {
-                                ProgressView()
-                            }
+                            .padding(.vertical, 6)
                         }
-                        .padding(.vertical, 6)
+                        .disabled(selecting != nil)
                     }
-                    .disabled(selecting != nil)
+                    
+                    Link(destination: URL(string: "https://rps-admin-frontend.onrender.com/request-club")!) {
+                        HStack {
+                            Label("Don't see your club? Get it set up", systemImage: "plus.circle")
+                                .font(.body)
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .foregroundStyle(.tint)
                 }
             }
             .searchable(text: $query, prompt: "Search clubs")

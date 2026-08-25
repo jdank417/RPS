@@ -17,11 +17,14 @@ struct CourseBuilderView: View {
     @Environment(LivePositionStore.self) private var liveFix
 
     @State private var showMarkListPicker = false
+    @State private var showRCClubPicker = false
     @State private var showVariationSheet = false
     @State private var placingEntry: CourseEntry?
     @State private var isLoadingMarks = false
     @State private var errorMessage: String?
     @State private var switchingListId: UUID?
+
+    var onPlotCourse: (() -> Void)?
 
     var body: some View {
         NavigationStack {
@@ -41,6 +44,11 @@ struct CourseBuilderView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarLeading) {
+                    Button {
+                        showRCClubPicker = true
+                    } label: {
+                        Label("RC Club", systemImage: "flag.2.crossed")
+                    }
                     Button {
                         showMarkListPicker = true
                     } label: {
@@ -78,6 +86,14 @@ struct CourseBuilderView: View {
                     selectedId: activeMarkListId
                 ) { list in
                     Task { await switchList(to: list) }
+                }
+            }
+            .sheet(isPresented: $showRCClubPicker) {
+                RCClubPickerSheet { club, list, marks in
+                    course.setRCClub(slug: club.slug, name: club.name)
+                    course.setActiveMarks(marks)
+                    course.setMarkListId(list.id)
+                    course.restoreFor(markListId: list.id)
                 }
             }
             .sheet(isPresented: $showVariationSheet) {
@@ -191,8 +207,8 @@ struct CourseBuilderView: View {
                 Spacer()
                 Button {
                     if course.setCourse() {
-                        // Committed — Race tab's map/navigator will pick up
-                        // the freshly-computed legs from the shared store.
+                        // Committed — navigate to Race tab's map.
+                        onPlotCourse?()
                     }
                 } label: {
                     Label("Plot Course", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
@@ -209,7 +225,10 @@ struct CourseBuilderView: View {
     // MARK: - Data loading
 
     private var markListName: String {
-        appState.bootstrap?.markLists.first { $0.id == activeMarkListId }?.name ?? "Course Builder"
+        if let rcName = course.rcClubName {
+            return rcName
+        }
+        return appState.bootstrap?.markLists.first { $0.id == activeMarkListId }?.name ?? "Course Builder"
     }
 
     private var activeMarkListId: UUID? {

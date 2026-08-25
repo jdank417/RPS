@@ -39,6 +39,7 @@ final class APIClient {
     private let keychain: KeychainStore
     private let session: URLSession
     private let refresher = TokenRefresher()
+    private let cache = APICache.shared
 
     private let decoder: JSONDecoder = {
         let d = JSONDecoder()
@@ -111,19 +112,36 @@ final class APIClient {
     // MARK: - Bootstrap / clubs / mark lists / marks
 
     func bootstrap(clubSlug: String?) async throws -> Bootstrap {
+        if let cached = cache.getBootstrap(clubSlug: clubSlug) {
+            return cached
+        }
         var path = "/api/v1/bootstrap"
         if let clubSlug, !clubSlug.isEmpty {
             path += "?club_slug=\(formEncode(clubSlug))"
         }
-        return try await authorizedRequest(path, method: "GET", body: Optional<NoBody>.none)
+        let fresh: Bootstrap = try await authorizedRequest(path, method: "GET", body: Optional<NoBody>.none)
+        cache.setBootstrap(fresh, clubSlug: clubSlug)
+        return fresh
     }
 
     func clubs(region: String? = nil, country: String? = nil) async throws -> [YachtClub] {
-        var query: [String] = []
-        if let region, !region.isEmpty { query.append("region=\(formEncode(region))") }
-        if let country, !country.isEmpty { query.append("country=\(formEncode(country))") }
-        let path = "/api/v1/clubs" + (query.isEmpty ? "" : "?" + query.joined(separator: "&"))
-        return try await authorizedRequest(path, method: "GET", body: Optional<NoBody>.none)
+        // Note: For simplicity, we only cache the unfiltered clubs() call.
+        // Regional/country filtering happens rarely and usually at onboarding.
+        guard region == nil && country == nil else {
+            var query: [String] = []
+            if let region, !region.isEmpty { query.append("region=\(formEncode(region))") }
+            if let country, !country.isEmpty { query.append("country=\(formEncode(country))") }
+            let path = "/api/v1/clubs" + (query.isEmpty ? "" : "?" + query.joined(separator: "&"))
+            return try await authorizedRequest(path, method: "GET", body: Optional<NoBody>.none)
+        }
+        
+        if let cached = cache.getClubs() {
+            return cached
+        }
+        let path = "/api/v1/clubs"
+        let fresh: [YachtClub] = try await authorizedRequest(path, method: "GET", body: Optional<NoBody>.none)
+        cache.setClubs(fresh)
+        return fresh
     }
 
     func club(slug: String) async throws -> YachtClub {
@@ -131,7 +149,13 @@ final class APIClient {
     }
 
     func markLists(clubSlug: String) async throws -> [MarkList] {
-        try await authorizedRequest("/api/v1/clubs/\(formEncode(clubSlug))/mark-lists", method: "GET", body: Optional<NoBody>.none)
+        if let cached = cache.getMarkLists(clubSlug: clubSlug) {
+            return cached
+        }
+        let path = "/api/v1/clubs/\(formEncode(clubSlug))/mark-lists"
+        let fresh: [MarkList] = try await authorizedRequest(path, method: "GET", body: Optional<NoBody>.none)
+        cache.setMarkLists(fresh, clubSlug: clubSlug)
+        return fresh
     }
 
     func markList(id: UUID) async throws -> MarkList {
@@ -139,7 +163,13 @@ final class APIClient {
     }
 
     func marks(markListId: UUID) async throws -> [Mark] {
-        try await authorizedRequest("/api/v1/mark-lists/\(markListId.uuidString)/marks", method: "GET", body: Optional<NoBody>.none)
+        if let cached = cache.getMarks(markListId: markListId) {
+            return cached
+        }
+        let path = "/api/v1/mark-lists/\(markListId.uuidString)/marks"
+        let fresh: [Mark] = try await authorizedRequest(path, method: "GET", body: Optional<NoBody>.none)
+        cache.setMarks(fresh, markListId: markListId)
+        return fresh
     }
 
     // MARK: - Core request plumbing

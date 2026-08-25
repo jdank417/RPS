@@ -58,7 +58,10 @@ final class LivePositionStore: NSObject {
         let status = manager.authorizationStatus
         switch status {
         case .notDetermined:
+            // Set intent flag so locationManagerDidChangeAuthorization will start updates
+            tracking = true
             manager.requestWhenInUseAuthorization()
+            return // Don't call startUpdatingLocation() until authorization is granted
         case .denied, .restricted:
             error = "Location is blocked — allow it in Settings to steer to the mark."
             return
