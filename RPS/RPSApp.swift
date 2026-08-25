@@ -4,14 +4,50 @@
 //
 //  Created by Jason Dank on 8/25/26.
 //
+//  Wires up the app's shared, long-lived @Observable stores once here and
+//  hands them down via the environment, so Course Builder and Race Mode
+//  read and write the same course/GPS/wind state rather than each holding
+//  their own copy.
+//
 
 import SwiftUI
 
 @main
 struct RPSApp: App {
+
+    @State private var appState: AppState
+    @State private var settings: AppSettings
+    @State private var courseStore: CourseStateStore
+    @State private var liveStore: LivePositionStore
+    @State private var windService: WindService
+    @State private var sequenceViewModel: StartSequenceViewModel
+    @State private var raceViewModel: RaceViewModel
+
+    init() {
+        let settings = AppSettings.shared
+        let courseStore = CourseStateStore(settings: settings)
+        let liveStore = LivePositionStore()
+        let windService = WindService()
+
+        _appState = State(initialValue: AppState())
+        _settings = State(initialValue: settings)
+        _courseStore = State(initialValue: courseStore)
+        _liveStore = State(initialValue: liveStore)
+        _windService = State(initialValue: windService)
+        _sequenceViewModel = State(initialValue: StartSequenceViewModel())
+        _raceViewModel = State(initialValue: RaceViewModel(courseStore: courseStore, liveStore: liveStore, windService: windService))
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
+                .environment(appState)
+                .environment(settings)
+                .environment(courseStore)
+                .environment(liveStore)
+                .environment(windService)
+                .environment(sequenceViewModel)
+                .environment(raceViewModel)
         }
     }
 }
