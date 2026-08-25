@@ -33,6 +33,7 @@ final class CourseStateStore {
         var markListId: UUID?
         var rcClubSlug: String?
         var rcClubName: String?
+        var rcListName: String?
     }
 
     private static let cacheKey = "rps.cache.course"
@@ -44,6 +45,7 @@ final class CourseStateStore {
     /// sailor's home club.
     var rcClubSlug: String?
     var rcClubName: String?
+    var rcListName: String?
 
     var activeMarks: [Mark] = []
     var course: [CourseEntry] = []
@@ -70,10 +72,47 @@ final class CourseStateStore {
 
     var unplaced: [CourseEntry] { unplacedEntries(course) }
 
+    /// Everything `computeCourseLegs` reads. Snapshotted so the memoised
+    /// result below can tell "nothing that matters changed" from "recompute".
+    private struct ComputationInputs: Equatable {
+        var course: [CourseEntry]
+        var defaultRounding: Rounding?
+        var twiceAround: Bool
+        var startUid: Int?
+        var variationDeg: Double
+    }
+
+    // Deliberately not observed: these are a cache of a value derived from
+    // observed state, not state in their own right. Observing them would
+    // re-invalidate every view that reads `legComputation` the moment the
+    // cache filled, which is the loop this exists to avoid.
+    @ObservationIgnored private var cachedInputs: ComputationInputs?
+    @ObservationIgnored private var cachedComputation: CourseComputation?
+
+    /// The course's legs, distances and map points.
+    ///
+    /// Memoised because this is read several times per SwiftUI body pass (the
+    /// map alone reads `.mapPoints`, `.legs.isEmpty`, the current leg and the
+    /// leg count) and those bodies re-evaluate on every GPS fix - roughly once
+    /// a second while racing. Recomputing a haversine and a bearing per leg,
+    /// several times a second, for a course that has not changed is where the
+    /// map's frame drops were coming from. The inputs comparison is a handful
+    /// of cheap field compares over a course that is realistically under a
+    /// dozen marks.
     var legComputation: CourseComputation {
-        computeCourseLegs(course, opts: CourseLegOptions(
+        let inputs = ComputationInputs(
+            course: course, defaultRounding: defaultRounding, twiceAround: twiceAround,
+            startUid: startUid, variationDeg: variationDeg
+        )
+        if inputs == cachedInputs, let cachedComputation {
+            return cachedComputation
+        }
+        let fresh = computeCourseLegs(course, opts: CourseLegOptions(
             defaultRounding: defaultRounding, twiceAround: twiceAround, startUid: startUid, variationDeg: variationDeg
         ))
+        cachedInputs = inputs
+        cachedComputation = fresh
+        return fresh
     }
 
     /// Clamped to the current leg count so it never points past the end when
@@ -94,7 +133,7 @@ final class CourseStateStore {
         let snapshot = Persisted(
             course: course, defaultRounding: defaultRounding, twiceAround: twiceAround,
             startUid: startUid, committed: committed, variationDeg: variationDeg, markListId: markListId,
-            rcClubSlug: rcClubSlug, rcClubName: rcClubName
+            rcClubSlug: rcClubSlug, rcClubName: rcClubName, rcListName: rcListName
         )
         guard !snapshot.course.isEmpty else {
             UserDefaults.standard.removeObject(forKey: Self.cacheKey)
@@ -136,17 +175,30 @@ final class CourseStateStore {
         variationDeg = s.variationDeg
         rcClubSlug = s.rcClubSlug
         rcClubName = s.rcClubName
+        rcListName = s.rcListName
         uidCounter = s.course.map(\.uid).max() ?? 0
         return true
     }
+
+    /// Which mark list the palette is currently loaded from. Set either by
+    /// the bootstrap default or by an explicit RC-club/list choice.
+    var activeMarkListId: UUID? { markListId }
 
     func setMarkListId(_ id: UUID?) {
         markListId = id
     }
     
-    func setRCClub(slug: String, name: String) {
+    func setRCClub(slug: String, name: String, listName: String?) {
         rcClubSlug = slug
         rcClubName = name
+        rcListName = listName
+        persist()
+    }
+
+    func clearRCClub() {
+        rcClubSlug = nil
+        rcClubName = nil
+        rcListName = nil
         persist()
     }
 

@@ -46,34 +46,52 @@ final class LivePositionStore: NSObject {
 
     var coordinate: CLLocationCoordinate2D? { fix?.coordinate }
 
+    /// Set when the sailor taps "Stop GPS", so returning to the Race tab
+    /// doesn't quietly switch it back on behind them.
+    private var stoppedDeliberately = false
+
     override init() {
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         manager.activityType = .otherNavigation
+        // CoreLocation pauses updates on its own when it decides you have
+        // stopped moving. On a boat sitting head-to-wind before a start, or
+        // parked in a lull, that is exactly when the sailor still needs a
+        // position - so opt out rather than lose the fix at the worst moment.
+        manager.pausesLocationUpdatesAutomatically = false
     }
 
-    func start() {
+    /// Begins tracking, honouring an earlier deliberate stop unless this is
+    /// an explicit request (`userInitiated`).
+    func start(userInitiated: Bool = true) {
+        if !userInitiated && stoppedDeliberately { return }
+        if userInitiated { stoppedDeliberately = false }
         guard !tracking else { return }
-        let status = manager.authorizationStatus
-        switch status {
+
+        switch manager.authorizationStatus {
         case .notDetermined:
-            // Set intent flag so locationManagerDidChangeAuthorization will start updates
+            // Record the intent, then wait: calling startUpdatingLocation()
+            // before the authorization callback lands is unreliable, and
+            // requestWhenInUseAuthorization() returns immediately rather
+            // than when the sailor actually taps Allow.
             tracking = true
             manager.requestWhenInUseAuthorization()
-            return // Don't call startUpdatingLocation() until authorization is granted
+            return
         case .denied, .restricted:
             error = "Location is blocked — allow it in Settings to steer to the mark."
             return
         default:
             break
         }
+
         error = nil
         tracking = true
         manager.startUpdatingLocation()
     }
 
     func stop() {
+        stoppedDeliberately = true
         manager.stopUpdatingLocation()
         tracking = false
     }
@@ -111,12 +129,13 @@ extension LivePositionStore: CLLocationManagerDelegate {
         Task { @MainActor in
             switch manager.authorizationStatus {
             case .authorizedWhenInUse, .authorizedAlways:
+                // `tracking` was set by start() before it returned to wait on
+                // this callback; that flag is the record that the sailor
+                // asked for GPS. Without it, authorization granted for some
+                // other reason should not start the receiver unasked.
                 if self.tracking {
+                    self.error = nil
                     manager.startUpdatingLocation()
-                } else if !self.tracking, self.error == nil {
-                    // Authorization just granted after a pending start() —
-                    // nothing to do until the sailor taps track again, to
-                    // avoid surprising them with GPS running unasked.
                 }
             case .denied, .restricted:
                 self.error = "Location is blocked — allow it in Settings to steer to the mark."

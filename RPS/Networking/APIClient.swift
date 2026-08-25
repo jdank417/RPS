@@ -51,10 +51,22 @@ final class APIClient {
         return e
     }()
 
-    init(settings: AppSettings = .shared, keychain: KeychainStore = .shared, session: URLSession = .shared) {
+    /// The backend sleeps after 15 minutes idle on its current hosting plan,
+    /// and waking it can take most of a minute. URLSession's 60s default
+    /// would surface that as a timeout error rather than a slow success, so
+    /// the first request of the day fails instead of merely being slow.
+    static func makeSession() -> URLSession {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 90
+        config.timeoutIntervalForResource = 120
+        config.waitsForConnectivity = true
+        return URLSession(configuration: config)
+    }
+
+    init(settings: AppSettings = .shared, keychain: KeychainStore = .shared, session: URLSession? = nil) {
         self.settings = settings
         self.keychain = keychain
-        self.session = session
+        self.session = session ?? APIClient.makeSession()
     }
 
     // MARK: - Auth
@@ -111,22 +123,24 @@ final class APIClient {
 
     // MARK: - Bootstrap / clubs / mark lists / marks
 
+    /// Always goes to the network. Bootstrap carries live account state and
+    /// is what validates the stored session, so serving it from cache as if
+    /// it were fresh would let an expired session look signed-in. The result
+    /// is still *written* to the cache, for the launch path to read back
+    /// deliberately (see `AppState.start()`).
     func bootstrap(clubSlug: String?) async throws -> Bootstrap {
-        if let cached = cache.getBootstrap(clubSlug: clubSlug) {
-            return cached
-        }
         var path = "/api/v1/bootstrap"
         if let clubSlug, !clubSlug.isEmpty {
             path += "?club_slug=\(formEncode(clubSlug))"
         }
         let fresh: Bootstrap = try await authorizedRequest(path, method: "GET", body: Optional<NoBody>.none)
-        cache.setBootstrap(fresh, clubSlug: clubSlug)
+        cache.setBootstrap(fresh)
         return fresh
     }
 
-    func clubs(region: String? = nil, country: String? = nil) async throws -> [YachtClub] {
-        // Note: For simplicity, we only cache the unfiltered clubs() call.
-        // Regional/country filtering happens rarely and usually at onboarding.
+    func clubs(region: String? = nil, country: String? = nil, forceRefresh: Bool = false) async throws -> [YachtClub] {
+        // Only the unfiltered list is cached; region/country filtering is
+        // rare and happens at onboarding, where a round trip is acceptable.
         guard region == nil && country == nil else {
             var query: [String] = []
             if let region, !region.isEmpty { query.append("region=\(formEncode(region))") }
@@ -134,12 +148,11 @@ final class APIClient {
             let path = "/api/v1/clubs" + (query.isEmpty ? "" : "?" + query.joined(separator: "&"))
             return try await authorizedRequest(path, method: "GET", body: Optional<NoBody>.none)
         }
-        
-        if let cached = cache.getClubs() {
+
+        if !forceRefresh, let cached = cache.getClubs() {
             return cached
         }
-        let path = "/api/v1/clubs"
-        let fresh: [YachtClub] = try await authorizedRequest(path, method: "GET", body: Optional<NoBody>.none)
+        let fresh: [YachtClub] = try await authorizedRequest("/api/v1/clubs", method: "GET", body: Optional<NoBody>.none)
         cache.setClubs(fresh)
         return fresh
     }
@@ -148,8 +161,8 @@ final class APIClient {
         try await authorizedRequest("/api/v1/clubs/\(formEncode(slug))", method: "GET", body: Optional<NoBody>.none)
     }
 
-    func markLists(clubSlug: String) async throws -> [MarkList] {
-        if let cached = cache.getMarkLists(clubSlug: clubSlug) {
+    func markLists(clubSlug: String, forceRefresh: Bool = false) async throws -> [MarkList] {
+        if !forceRefresh, let cached = cache.getMarkLists(clubSlug: clubSlug) {
             return cached
         }
         let path = "/api/v1/clubs/\(formEncode(clubSlug))/mark-lists"
@@ -162,8 +175,8 @@ final class APIClient {
         try await authorizedRequest("/api/v1/mark-lists/\(id.uuidString)", method: "GET", body: Optional<NoBody>.none)
     }
 
-    func marks(markListId: UUID) async throws -> [Mark] {
-        if let cached = cache.getMarks(markListId: markListId) {
+    func marks(markListId: UUID, forceRefresh: Bool = false) async throws -> [Mark] {
+        if !forceRefresh, let cached = cache.getMarks(markListId: markListId) {
             return cached
         }
         let path = "/api/v1/mark-lists/\(markListId.uuidString)/marks"

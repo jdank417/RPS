@@ -18,6 +18,21 @@ struct RaceModeView: View {
         case countdown = "Countdown"
         case map = "Map"
         var id: String { rawValue }
+
+        /// Five segments of text ("Instruments", "Countdown", "Start Line")
+        /// do not fit across an iPhone - they truncate to ellipses and the
+        /// control reads as cramped. Icons fit comfortably at a full tap
+        /// target each; the navigation title carries the name of whichever
+        /// one is selected, so nothing is actually lost.
+        var symbol: String {
+            switch self {
+            case .leg: return "arrow.triangle.turn.up.right.diamond"
+            case .instruments: return "gauge.with.dots.needle.bottom.50percent"
+            case .start: return "flag.checkered"
+            case .countdown: return "timer"
+            case .map: return "map"
+            }
+        }
     }
 
     @Environment(RaceViewModel.self) private var race
@@ -28,17 +43,24 @@ struct RaceModeView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 Picker("View", selection: $selectedSegment) {
-                    ForEach(Segment.allCases) { Text($0.rawValue).tag($0) }
+                    ForEach(Segment.allCases) { segment in
+                        Image(systemName: segment.symbol)
+                            .accessibilityLabel(segment.rawValue)
+                            .tag(segment)
+                    }
                 }
                 .pickerStyle(.segmented)
-                .padding([.horizontal, .top], 12)
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
 
                 if let error = liveStore.error {
                     Label(error, systemImage: "location.slash.fill")
                         .font(.footnote)
                         .foregroundStyle(.orange)
-                        .padding(.horizontal)
-                        .padding(.top, 4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 10)
                 }
 
                 Group {
@@ -52,7 +74,7 @@ struct RaceModeView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .navigationTitle("Race Mode")
+            .navigationTitle(selectedSegment.rawValue)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -65,80 +87,90 @@ struct RaceModeView: View {
                 }
             }
         }
-        .onAppear { liveStore.start() }
+        // Not userInitiated: if the sailor deliberately stopped GPS, coming
+        // back to this tab must not silently restart it.
+        .onAppear { liveStore.start(userInitiated: false) }
         .onChange(of: liveStore.fix) { _, _ in race.refreshWindIfNeeded() }
     }
 
+    /// Height the leg toolbar occupies, handed to the map so it insets its
+    /// content above it rather than plotting marks underneath it.
+    private let legToolbarHeight: CGFloat = 108
+
     private var raceMap: some View {
-        ZStack(alignment: .bottom) {
-            CourseMapView(
-                mapPoints: race.courseStore.legComputation.mapPoints,
-                liveFix: liveStore.fix,
-                pin: race.pin,
-                committee: race.committee,
-                highlightedLegIndex: race.courseStore.currentLegIndex
-            )
-            .ignoresSafeArea(edges: .bottom)
-            
-            if !race.courseStore.legComputation.legs.isEmpty {
-                legToolbar
+        let computation = race.courseStore.legComputation
+        return CourseMapView(
+            mapPoints: computation.mapPoints,
+            liveFix: liveStore.fix,
+            pin: race.pin,
+            committee: race.committee,
+            highlightedLegIndex: race.courseStore.currentLegIndex,
+            bottomContentInset: computation.legs.isEmpty ? 0 : legToolbarHeight
+        )
+        // safeAreaInset rather than a ZStack overlay: this keeps the toolbar
+        // clear of the tab bar and home indicator instead of sitting on top
+        // of them, which is what made the map feel cramped.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !computation.legs.isEmpty {
+                legToolbar(legs: computation.legs)
             }
         }
     }
-    
-    private var legToolbar: some View {
-        VStack(spacing: 0) {
-            if let currentIndex = race.courseStore.currentLegIndex,
-               let leg = race.courseStore.legComputation.legs[safe: currentIndex] {
-                HStack(spacing: 12) {
-                    Button {
-                        if currentIndex > 0 {
-                            race.courseStore.setCurrentLeg(currentIndex - 1)
-                        }
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.title3.weight(.semibold))
-                            .frame(width: 44, height: 44)
-                    }
-                    .disabled(currentIndex == 0)
-                    
-                    VStack(spacing: 4) {
-                        Text("LEG \(leg.legIndex + 1)").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
-                        Text("\(leg.fromLabel) → \(leg.toLabel)")
-                            .font(.subheadline.weight(.semibold))
-                        HStack(spacing: 16) {
-                            if let hdg = leg.magHdg ?? leg.trueHdg {
-                                Label(GeoMath.fmtHeading(hdg), systemImage: "location.north.fill")
-                                    .font(.caption.weight(.medium))
-                            }
-                            if let dist = leg.distNm {
-                                Label(String(format: "%.2f nm", dist), systemImage: "ruler")
-                                    .font(.caption.weight(.medium))
-                            }
-                        }
-                        .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    
-                    Button {
-                        if currentIndex < race.courseStore.legComputation.legs.count - 1 {
-                            race.courseStore.setCurrentLeg(currentIndex + 1)
-                        }
-                    } label: {
-                        Image(systemName: "chevron.right")
-                            .font(.title3.weight(.semibold))
-                            .frame(width: 44, height: 44)
-                    }
-                    .disabled(currentIndex == race.courseStore.legComputation.legs.count - 1)
+
+    @ViewBuilder
+    private func legToolbar(legs: [LegInfo]) -> some View {
+        if let currentIndex = race.courseStore.currentLegIndex, let leg = legs[safe: currentIndex] {
+            HStack(spacing: 8) {
+                stepButton(systemImage: "chevron.left", label: "Previous leg") {
+                    race.courseStore.setCurrentLeg(currentIndex - 1)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                .shadow(radius: 8)
-                .padding()
+                .disabled(currentIndex == 0)
+
+                VStack(spacing: 5) {
+                    Text("LEG \(leg.legIndex + 1) OF \(legs.count)")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .tracking(1)
+                    Text("\(leg.fromLabel) → \(leg.toLabel)")
+                        .font(.headline)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    HStack(spacing: 18) {
+                        if let hdg = leg.magHdg ?? leg.trueHdg {
+                            Label(GeoMath.fmtHeading(hdg), systemImage: "location.north.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .monospacedDigit()
+                        }
+                        if let dist = leg.distNm {
+                            Label(String(format: "%.2f nm", dist), systemImage: "ruler")
+                                .font(.subheadline.weight(.semibold))
+                                .monospacedDigit()
+                        }
+                    }
+                    .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+
+                stepButton(systemImage: "chevron.right", label: "Next leg") {
+                    race.courseStore.setCurrentLeg(currentIndex + 1)
+                }
+                .disabled(currentIndex >= legs.count - 1)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 14)
+            .frame(height: legToolbarHeight)
+            .background(.ultraThinMaterial)
         }
+    }
+
+    private func stepButton(systemImage: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.title3.weight(.semibold))
+                .frame(width: 48, height: 48)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(label)
     }
 }
 
