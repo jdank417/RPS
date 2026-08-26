@@ -49,6 +49,7 @@ struct CourseBuilderView: View {
         NavigationStack {
             List {
                 raceSection
+                signalsSection
 
                 if let message = course.statusMessage {
                     Section {
@@ -211,6 +212,59 @@ struct CourseBuilderView: View {
         appState.bootstrap?.markLists.first { $0.id == activeMarkListId }?.name
     }
 
+    /// What the RC is flying, as cloth you tap rather than settings you hunt
+    /// for. Both of these were a single visible tap in the web app and had
+    /// regressed here - the course-wide rounding had no control at all, and
+    /// twice-around was hidden behind the overflow menu, which is the wrong
+    /// place for something the RC can change between races.
+    private var signalsSection: some View {
+        Section {
+            HStack(spacing: 10) {
+                SignalButton(
+                    caption: roundingCaption,
+                    isActive: course.defaultRounding != nil,
+                    activeColor: course.defaultRounding == .port ? .red : .green,
+                    cloth: { RoundingFlagCloth(rounding: course.defaultRounding) },
+                    action: {
+                        withAnimation(CourseMotion.rounding) { course.cycleDefaultRounding() }
+                    }
+                )
+
+                SignalButton(
+                    caption: "Twice around",
+                    isActive: course.twiceAround,
+                    activeColor: Color(red: 0.114, green: 0.310, blue: 0.612),
+                    cloth: { CodeFlagT(flying: course.twiceAround) },
+                    action: {
+                        withAnimation(CourseMotion.rounding) { course.toggleTwiceAround() }
+                    }
+                )
+            }
+            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+        } header: {
+            Text("RC signals")
+        } footer: {
+            Text(signalsFooter)
+        }
+    }
+
+    private var roundingCaption: String {
+        switch course.defaultRounding {
+        case .starboard: return "Green — stbd"
+        case .port: return "Red — port"
+        case nil: return "No flag"
+        }
+    }
+
+    private var signalsFooter: String {
+        let rounding = course.defaultRounding == nil
+            ? "No course-wide rounding signalled — set each mark individually below."
+            : "All marks \(roundingWord(course.defaultRounding)) unless a mark says otherwise."
+        return course.twiceAround
+            ? rounding + " Code flag T is up — the course is sailed twice."
+            : rounding
+    }
+
     private var courseSection: some View {
         Section {
             if course.course.isEmpty {
@@ -223,7 +277,13 @@ struct CourseBuilderView: View {
                         index: index,
                         isStart: course.isStartEntry(entry, index: index),
                         effectiveRounding: course.effectiveRounding(entry),
-                        needsPosition: resolvedPosition(entry) == nil
+                        needsPosition: resolvedPosition(entry) == nil,
+                        isInherited: entry.rounding == nil,
+                        onCycleRounding: {
+                            withAnimation(CourseMotion.rounding) {
+                                course.cycleEntryRounding(uid: entry.uid)
+                            }
+                        }
                     )
                     // A mark slides in from the palette below and lifts back
                     // out the way it came, rather than the default fade that
@@ -232,12 +292,6 @@ struct CourseBuilderView: View {
                         insertion: .move(edge: .bottom).combined(with: .opacity),
                         removal: .move(edge: .trailing).combined(with: .opacity)
                     ))
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(CourseMotion.rounding) {
-                            course.cycleEntryRounding(uid: entry.uid)
-                        }
-                    }
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
                             withAnimation(CourseMotion.remove) {
@@ -273,7 +327,7 @@ struct CourseBuilderView: View {
         } header: {
             Text("Course")
         } footer: {
-            Text("Tap a mark to cycle its rounding (S → P → default). Swipe left to place or set as start; swipe right to remove.")
+            Text("Tap a mark's S/P tag to set how it's rounded. A hollow tag means it's following the RC's signal above. Swipe left to place or set as start; swipe right to remove.")
         }
     }
 
@@ -428,6 +482,10 @@ private struct CourseEntryRow: View {
     let isStart: Bool
     let effectiveRounding: Rounding?
     let needsPosition: Bool
+    /// True when this mark carries no rounding of its own and is following
+    /// the RC's course-wide signal.
+    let isInherited: Bool
+    let onCycleRounding: () -> Void
 
     var body: some View {
         HStack(spacing: 14) {
@@ -467,7 +525,19 @@ private struct CourseEntryRow: View {
                     }
                 }
             }
-            Spacer()
+
+            Spacer(minLength: 6)
+
+            // Its own control rather than a tap anywhere on the row: the old
+            // behaviour was invisible, and it also meant every attempt to
+            // select the row changed the course.
+            Button(action: onCycleRounding) {
+                RoundingTag(rounding: effectiveRounding, isInherited: isInherited)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Rounding for \(entry.mark.code)")
+            .accessibilityValue(effectiveRounding.map { roundingWord($0) } ?? "not set")
+            .accessibilityHint("Cycles starboard, port, or follow the RC signal")
         }
         .padding(.vertical, 4)
     }

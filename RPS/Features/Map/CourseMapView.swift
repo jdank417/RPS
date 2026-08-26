@@ -22,6 +22,12 @@ struct CourseMapView: View {
     var bottomContentInset: CGFloat = 0
 
     @State private var camera: MapCameraPosition = .automatic
+    /// The map's current rotation. Annotations stay upright relative to the
+    /// screen, so a leg arrow drawn at a true bearing would point the wrong
+    /// way the moment the map is rotated (which follow-boat mode does
+    /// continuously). Subtracting the camera's heading keeps the arrow
+    /// pointing where the leg actually goes.
+    @State private var cameraHeading: Double = 0
     /// The course this camera was last framed for. Re-framing keys off this
     /// rather than a bool, so a course that *changes* re-frames instead of
     /// leaving the sailor looking at the water the last course was on.
@@ -43,13 +49,47 @@ struct CourseMapView: View {
 
     private func rounded(_ v: Double) -> Int { Int((v * 10_000).rounded()) }
 
+    /// One direction arrow per leg, at its midpoint.
+    private struct LegArrow: Identifiable {
+        let id: Int
+        let coordinate: CLLocationCoordinate2D
+        let bearing: Double
+    }
+
+    private var legArrows: [LegArrow] {
+        guard placedPoints.count >= 2 else { return [] }
+        return (0..<(placedPoints.count - 1)).compactMap { i in
+            let a = placedPoints[i]
+            let b = placedPoints[i + 1]
+            // A zero-length leg (two marks resolving to the same spot) has no
+            // meaningful bearing to draw.
+            guard GeoMath.haversineNm(lat1: a.lat, lon1: a.lon, lat2: b.lat, lon2: b.lon) > 0.005 else {
+                return nil
+            }
+            let mid = GeoMath.midpoint(lat1: a.lat, lon1: a.lon, lat2: b.lat, lon2: b.lon)
+            return LegArrow(
+                id: i,
+                coordinate: CLLocationCoordinate2D(latitude: mid.lat, longitude: mid.lon),
+                bearing: GeoMath.initialBearing(lat1: a.lat, lon1: a.lon, lat2: b.lat, lon2: b.lon)
+            )
+        }
+    }
+
     var body: some View {
         Map(position: $camera) {
             courseLineContent
             highlightedLegContent
             startLineContent
+            legArrowContent
             markAnnotations
             boatAnnotation
+        }
+        .onMapCameraChange(frequency: .continuous) { context in
+            // Only when it has moved enough to matter: this fires on every
+            // frame of a pan or zoom, and rewriting state each time would
+            // re-render the whole map for a rotation nobody can see.
+            let heading = context.camera.heading
+            if abs(heading - cameraHeading) > 1 { cameraHeading = heading }
         }
         .mapStyle(hybrid ? .hybrid(elevation: .flat) : .standard(elevation: .flat, pointsOfInterest: .excludingAll))
         .mapControls {
@@ -151,6 +191,18 @@ struct CourseMapView: View {
             Annotation("RC", coordinate: committee.coordinate) {
                 lineEndMarker(label: "RC", systemImage: "flag.fill")
             }
+        }
+    }
+
+    @MapContentBuilder
+    private var legArrowContent: some MapContent {
+        ForEach(legArrows) { arrow in
+            Annotation("", coordinate: arrow.coordinate, anchor: .center) {
+                LegDirectionArrow(isActive: arrow.id == highlightedLegIndex)
+                    .rotationEffect(.degrees(arrow.bearing - cameraHeading))
+                    .allowsHitTesting(false)
+            }
+            .annotationTitles(.hidden)
         }
     }
 
