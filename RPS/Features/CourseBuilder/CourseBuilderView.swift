@@ -11,6 +11,26 @@
 import SwiftUI
 import CoreLocation
 
+/// The course list's motion, named once so every edit to the course moves
+/// the same way.
+///
+/// Declared as explicitly-typed `Animation` constants rather than written
+/// inline as `.snappy(...)` at each call site: a leading-dot member lookup
+/// inside `withAnimation` has to be resolved against the closure's return
+/// type at the same time, and when that closure calls something returning a
+/// value the type checker reports the failure against the *animation*
+/// ("Ambiguous use of 'spring(duration:bounce:blendDuration:)'") rather than
+/// the real cause. Giving the type up front removes that whole class of
+/// misdirected error.
+private enum CourseMotion {
+    static let add: Animation = .snappy(duration: 0.28, extraBounce: 0.18)
+    static let remove: Animation = .snappy(duration: 0.28, extraBounce: 0.1)
+    static let rounding: Animation = .snappy(duration: 0.22, extraBounce: 0.2)
+    static let start: Animation = .snappy(duration: 0.28, extraBounce: 0.2)
+    static let reorder: Animation = .snappy(duration: 0.3, extraBounce: 0.15)
+    static let list: Animation = .snappy(duration: 0.28, extraBounce: 0.15)
+}
+
 struct CourseBuilderView: View {
     @Environment(AppState.self) private var appState
     @Environment(CourseStateStore.self) private var course
@@ -46,7 +66,7 @@ struct CourseBuilderView: View {
             // confirmation a physical control gives, which matters when the
             // phone is being used one-handed and half-watched.
             .sensoryFeedback(.impact(flexibility: .soft), trigger: course.course.count)
-            .animation(.snappy(duration: 0.28, extraBounce: 0.15), value: course.course)
+            .animation(CourseMotion.list, value: course.course)
             .navigationTitle(markListName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -214,13 +234,13 @@ struct CourseBuilderView: View {
                     ))
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        withAnimation(.snappy(duration: 0.22, extraBounce: 0.2)) {
+                        withAnimation(CourseMotion.rounding) {
                             course.cycleEntryRounding(uid: entry.uid)
                         }
                     }
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
-                            withAnimation(.snappy(duration: 0.28, extraBounce: 0.1)) {
+                            withAnimation(CourseMotion.remove) {
                                 course.removeMark(uid: entry.uid)
                             }
                         } label: {
@@ -235,7 +255,7 @@ struct CourseBuilderView: View {
                         }
                         .tint(.orange)
                         Button {
-                            withAnimation(.snappy(duration: 0.28, extraBounce: 0.2)) {
+                            withAnimation(CourseMotion.start) {
                                 course.startUid = entry.uid
                             }
                         } label: {
@@ -245,7 +265,7 @@ struct CourseBuilderView: View {
                     }
                 }
                 .onMove { from, to in
-                    withAnimation(.snappy(duration: 0.3, extraBounce: 0.15)) {
+                    withAnimation(CourseMotion.reorder) {
                         course.moveMark(fromOffsets: from, toOffset: to)
                     }
                 }
@@ -266,8 +286,13 @@ struct CourseBuilderView: View {
             } else {
                 ForEach(course.activeMarks) { mark in
                     Button {
-                        withAnimation(.snappy(duration: 0.28, extraBounce: 0.18)) {
-                            course.addMark(mark)
+                        // `_ =` matters: addMark is @discardableResult but
+                        // still returns Bool, so without it this single-
+                        // expression closure infers a Bool return that
+                        // withAnimation cannot reconcile with the Button
+                        // action's Void.
+                        withAnimation(CourseMotion.add) {
+                            _ = course.addMark(mark)
                         }
                     } label: {
                         HStack(spacing: 12) {
