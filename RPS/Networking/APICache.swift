@@ -39,10 +39,15 @@ final class APICache {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    /// Reference data: clubs, mark lists and marks change only when a club
-    /// admin edits them in the web console, so a long TTL is safe. Pull to
-    /// refresh is the manual override.
-    private let referenceTTL: TimeInterval = 60 * 60 * 12
+    /// How old a cached copy may be and still be worth handing back *when
+    /// the network is unreachable*.
+    ///
+    /// This is not a freshness window: reference data is fetched
+    /// network-first (see `APIClient.referenceData`), so a cached copy is
+    /// only ever read when the request actually failed. Given that, generous
+    /// is correct - a boat that has been out of signal for a weekend still
+    /// wants last week's marks rather than an empty list.
+    private let referenceTTL: TimeInterval = 60 * 60 * 24 * 30
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -98,7 +103,20 @@ final class APICache {
     func getMarkLists(clubSlug: String) -> [MarkList]? {
         get("markLists.\(clubSlug)", maxAge: referenceTTL)
     }
+    /// Stores the club's lists, and takes any list that has disappeared since
+    /// the last fetch down with it.
+    ///
+    /// A list deleted in the admin console otherwise leaves its buoys sitting
+    /// in local storage under an id nothing points at - dormant, until
+    /// something asks for that id again and a retired list's marks come back
+    /// from the dead. Diffing here rather than at the call site means it
+    /// can't be forgotten: every path that refreshes the index prunes.
     func setMarkLists(_ lists: [MarkList], clubSlug: String) {
+        let previous: [MarkList] = getStale("markLists.\(clubSlug)") ?? []
+        let live = Set(lists.map(\.id))
+        for gone in previous.map(\.id) where !live.contains(gone) {
+            invalidate("marks.\(gone.uuidString)")
+        }
         set(lists, for: "markLists.\(clubSlug)")
     }
 
@@ -107,6 +125,12 @@ final class APICache {
     }
     func setMarks(_ marks: [Mark], markListId: UUID) {
         set(marks, for: "marks.\(markListId.uuidString)")
+    }
+
+    /// Drops a single list's cached marks - used when the server answers 404
+    /// because the list was deleted in the admin console.
+    func forgetMarks(markListId: UUID) {
+        invalidate("marks.\(markListId.uuidString)")
     }
 
     // MARK: - Bootstrap

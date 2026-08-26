@@ -138,6 +138,38 @@ final class APIClient {
         return fresh
     }
 
+    /// Fetches reference data network-first, falling back to the cache only
+    /// when the network genuinely fails.
+    ///
+    /// Deliberately not cache-first. Marks, and the lists they live in, are
+    /// navigational data a sailor steers by: a club admin who corrects a
+    /// buoy's position, or retires a list, has to see that reach the boat
+    /// now, not whenever a TTL happens to lapse. Serving a stale position
+    /// for hours because it was quicker is the wrong trade for this app.
+    ///
+    /// The cache still earns its place - it is what a boat that has lost
+    /// signal falls back to, which is normal on the water rather than
+    /// exceptional. And launch stays instant regardless, because that is
+    /// handled separately by the bootstrap payload's stale-while-revalidate
+    /// in `AppState.start()`.
+    private func referenceData<T: Codable>(
+        path: String,
+        cached: () -> T?,
+        store: (T) -> Void
+    ) async throws -> T {
+        do {
+            let fresh: T = try await authorizedRequest(path, method: "GET", body: Optional<NoBody>.none)
+            store(fresh)
+            return fresh
+        } catch let error as APIError {
+            // Only a transport failure falls back. A 4xx is the server
+            // telling us something true (the list is gone, the session is
+            // dead) and must not be papered over with stale data.
+            guard case .transport = error, let cached = cached() else { throw error }
+            return cached
+        }
+    }
+
     func clubs(region: String? = nil, country: String? = nil, forceRefresh: Bool = false) async throws -> [YachtClub] {
         // Only the unfiltered list is cached; region/country filtering is
         // rare and happens at onboarding, where a round trip is acceptable.
@@ -149,12 +181,11 @@ final class APIClient {
             return try await authorizedRequest(path, method: "GET", body: Optional<NoBody>.none)
         }
 
-        if !forceRefresh, let cached = cache.getClubs() {
-            return cached
-        }
-        let fresh: [YachtClub] = try await authorizedRequest("/api/v1/clubs", method: "GET", body: Optional<NoBody>.none)
-        cache.setClubs(fresh)
-        return fresh
+        return try await referenceData(
+            path: "/api/v1/clubs",
+            cached: { forceRefresh ? nil : cache.getClubs() },
+            store: { cache.setClubs($0) }
+        )
     }
 
     func club(slug: String) async throws -> YachtClub {
@@ -162,13 +193,12 @@ final class APIClient {
     }
 
     func markLists(clubSlug: String, forceRefresh: Bool = false) async throws -> [MarkList] {
-        if !forceRefresh, let cached = cache.getMarkLists(clubSlug: clubSlug) {
-            return cached
-        }
-        let path = "/api/v1/clubs/\(formEncode(clubSlug))/mark-lists"
-        let fresh: [MarkList] = try await authorizedRequest(path, method: "GET", body: Optional<NoBody>.none)
-        cache.setMarkLists(fresh, clubSlug: clubSlug)
-        return fresh
+        let lists: [MarkList] = try await referenceData(
+            path: "/api/v1/clubs/\(formEncode(clubSlug))/mark-lists",
+            cached: { forceRefresh ? nil : cache.getMarkLists(clubSlug: clubSlug) },
+            store: { cache.setMarkLists($0, clubSlug: clubSlug) }
+        )
+        return lists
     }
 
     func markList(id: UUID) async throws -> MarkList {
@@ -176,13 +206,18 @@ final class APIClient {
     }
 
     func marks(markListId: UUID, forceRefresh: Bool = false) async throws -> [Mark] {
-        if !forceRefresh, let cached = cache.getMarks(markListId: markListId) {
-            return cached
+        do {
+            return try await referenceData(
+                path: "/api/v1/mark-lists/\(markListId.uuidString)/marks",
+                cached: { forceRefresh ? nil : cache.getMarks(markListId: markListId) },
+                store: { cache.setMarks($0, markListId: markListId) }
+            )
+        } catch APIError.server(status: 404, let detail) {
+            // The list was deleted server-side. Forget it locally too, so it
+            // stops being offered and its marks can't come back.
+            cache.forgetMarks(markListId: markListId)
+            throw APIError.server(status: 404, detail: detail ?? "That mark list no longer exists.")
         }
-        let path = "/api/v1/mark-lists/\(markListId.uuidString)/marks"
-        let fresh: [Mark] = try await authorizedRequest(path, method: "GET", body: Optional<NoBody>.none)
-        cache.setMarks(fresh, markListId: markListId)
-        return fresh
     }
 
     // MARK: - Core request plumbing

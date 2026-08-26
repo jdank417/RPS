@@ -470,6 +470,20 @@ struct CourseBuilderView: View {
             course.setActiveMarks(marks, keepCourse: sameList)
             course.setMarkListId(list.id)
             if !sameList { course.restoreFor(markListId: list.id) }
+        } catch APIError.server(status: 404, _) {
+            // The list was deleted in the admin console while this phone
+            // still had it selected. Say so and drop back to the home club's
+            // default rather than leaving a dead list named in the header
+            // with no marks under it.
+            course.clearRCClub()
+            // Clear the palette (and with it a course built from marks that
+            // no longer exist) so the reload below repopulates from whatever
+            // the club actually has now.
+            course.setActiveMarks([])
+            course.setMarkListId(nil)
+            errorMessage = "That mark list was removed by the club. Pick another one."
+            await appState.refresh()
+            await loadInitialMarksIfNeeded()
         } catch {
             errorMessage = error.localizedDescription
         }
