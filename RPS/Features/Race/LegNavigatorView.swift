@@ -14,15 +14,9 @@ struct LegNavigatorView: View {
     @Environment(CourseStateStore.self) private var course
     @Environment(WindService.self) private var windService
     @Environment(LivePositionStore.self) private var liveStore
+    @Environment(AppSettings.self) private var settings
 
     private var legs: [LegInfo] { course.legComputation.legs }
-
-    /// Course still to sail from the start of `index`, this leg included.
-    /// What's left is the number that matters when deciding whether to
-    /// change a headsail; how far you've already come is history.
-    private func remainingNm(from index: Int) -> Double {
-        legs.filter { $0.legIndex >= index }.compactMap(\.distNm).reduce(0, +)
-    }
 
     var body: some View {
         Group {
@@ -41,9 +35,8 @@ struct LegNavigatorView: View {
                         LegPage(
                             leg: leg,
                             legCount: legs.count,
-                            remainingNm: remainingNm(from: leg.legIndex),
-                            totalNm: course.legComputation.totalNm,
                             speedKts: liveStore.fix?.speedKts,
+                            useMagnetic: settings.useMagnetic,
                             wind: windService.wind,
                             windIsStale: windService.stale
                         )
@@ -61,12 +54,13 @@ struct LegNavigatorView: View {
 private struct LegPage: View {
     let leg: LegInfo
     let legCount: Int
-    let remainingNm: Double
-    let totalNm: Double
     /// Live speed over ground, when GPS is running - turns the leg's
     /// distance into a time, which is the form the question is usually
     /// asked in ("do we make the gun?").
     let speedKts: Double?
+    /// Lead with magnetic instead of true. Both are always shown; this only
+    /// decides which one gets the big type.
+    let useMagnetic: Bool
     let wind: WindReading?
     let windIsStale: Bool
 
@@ -103,7 +97,6 @@ private struct LegPage: View {
 
                 statsRow
                 windCallout
-                courseProgress
 
                 Spacer(minLength: 0)
             }
@@ -203,97 +196,78 @@ private struct LegPage: View {
             : String(format: "h:mm at %.1f kt", speedKts)
     }
 
-    /// How much course is left from here. A thin bar rather than another
-    /// tile: it's orientation, not a number to act on.
-    private var courseProgress: some View {
-        VStack(spacing: 5) {
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color(uiColor: .tertiarySystemFill))
-                    Capsule()
-                        .fill(Color.accentColor)
-                        .frame(width: geo.size.width * remainingFraction)
-                }
-            }
-            .frame(height: 4)
-
-            Text(String(format: "%.2f nm remaining of %.2f nm course", remainingNm, totalNm))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var remainingFraction: CGFloat {
-        guard totalNm > 0 else { return 0 }
-        return CGFloat(min(max(remainingNm / totalNm, 0), 1))
-    }
-
-    /// One line of sail advice under the numbers. Uses the leg's *true*
-    /// heading, not the magnetic one shown above: the forecast reports wind
-    /// in degrees true, and mixing the two would put the boat on the wrong
-    /// tack on paper.
+    /// The sail call, and where the breeze is coming from.
+    ///
+    /// Uses the leg's *true* heading, not whichever one is displayed above:
+    /// the forecast reports wind in degrees true, and mixing the two would
+    /// put the boat on the wrong tack on paper.
+    ///
+    /// The wind *angle* deliberately isn't repeated here - it sits under the
+    /// rose, next to the picture it describes. This page was showing four
+    /// bare numbers ending in a degree sign with nothing to say which was
+    /// which.
     @ViewBuilder
     private var windCallout: some View {
         if let wind, let heading = leg.trueHdg {
             let plan = SailPlan(legHeadingDeg: heading, windFromDeg: wind.fromDeg)
-            VStack(spacing: 3) {
-                HStack(spacing: 8) {
-                    Text("\(Int(abs(plan.twaDeg).rounded()))°")
-                        .font(.subheadline.weight(.bold))
-                        .monospacedDigit()
-                    Text(plan.tack == .port ? "PORT" : "STBD")
-                        .font(.caption2.weight(.heavy))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1.5)
-                        .background(
-                            plan.tack == .port
-                                ? Color(red: 0.816, green: 0.126, blue: 0.122)
-                                : Color(red: 0.086, green: 0.478, blue: 0.239),
-                            in: Capsule()
-                        )
-                    Text(plan.pointOfSail)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+            VStack(spacing: 4) {
+                Text(plan.pointOfSail)
+                    .font(.headline)
                 Text(plan.sails)
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(plan.isBeat ? Color.orange : Color.secondary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.75)
                 Text(
-                    "Forecast \(Int(wind.fromDeg.rounded()))° · \(Int(wind.speedKts.rounded())) kt"
+                    "Wind from \(Int(wind.fromDeg.rounded()))°T at \(Int(wind.speedKts.rounded())) kt"
                     + (windIsStale ? " · stale" : "")
                 )
                 .font(.caption2)
                 .foregroundStyle(windIsStale ? Color.orange : Color.secondary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
             .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
         }
     }
 
+    /// True leads by default, magnetic underneath.
+    ///
+    /// Everything else on this screen is in degrees true - the wind angle,
+    /// the forecast direction, the start-line bias - so leading with
+    /// magnetic meant the biggest number on the page was the one that
+    /// agreed with nothing near it. Sailors steering to a bulkhead compass
+    /// can flip it in Profile; either way both are shown.
     private var headingBlock: some View {
         VStack(spacing: 2) {
-            Text(GeoMath.fmtHeading(leg.magHdg ?? leg.trueHdg ?? 0))
+            Text(GeoMath.fmtHeading(primaryHeading))
                 .font(.system(size: 62, weight: .heavy, design: .rounded))
                 .monospacedDigit()
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 .contentTransition(.numericText())
-            Text("MAGNETIC")
+            Text(useMagnetic ? "MAGNETIC" : "TRUE")
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(.secondary)
                 .tracking(2)
-            if let trueHdg = leg.trueHdg {
-                Text("\(GeoMath.fmtHeading(trueHdg)) true")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
+            Text("\(GeoMath.fmtHeading(secondaryHeading)) \(useMagnetic ? "true" : "mag")")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "Heading \(Int(primaryHeading.rounded())) degrees \(useMagnetic ? "magnetic" : "true")"
+        )
+    }
+
+    private var primaryHeading: Double {
+        let trueHdg = leg.trueHdg ?? 0
+        return useMagnetic ? (leg.magHdg ?? trueHdg) : trueHdg
+    }
+
+    private var secondaryHeading: Double {
+        let trueHdg = leg.trueHdg ?? 0
+        return useMagnetic ? trueHdg : (leg.magHdg ?? trueHdg)
     }
 
     private func statTile(title: String, value: String, unit: String) -> some View {
@@ -322,4 +296,5 @@ private struct LegPage: View {
         .environment(CourseStateStore())
         .environment(WindService())
         .environment(LivePositionStore())
+        .environment(AppSettings.shared)
 }

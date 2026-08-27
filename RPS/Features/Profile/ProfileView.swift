@@ -54,10 +54,30 @@ struct ProfileView: View {
                     Button("Change Password") { showChangePassword = true }
                 }
 
+                Section {
+                    Picker("Headings", selection: Binding(
+                        get: { settings.useMagnetic },
+                        set: { settings.useMagnetic = $0 }
+                    )) {
+                        Text("True").tag(false)
+                        Text("Magnetic").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+
+                    LabeledContent("Magnetic variation", value: String(format: "%.1f°", settings.variationDeg))
+                } header: {
+                    Text("Headings")
+                } footer: {
+                    Text(
+                        settings.useMagnetic
+                            ? "Leg headings show magnetic first, with true underneath. Wind angles are still worked out in degrees true."
+                            : "Leg headings show true first, with magnetic underneath — matching the wind forecast and start-line bias, which are both in degrees true."
+                    )
+                }
+
                 Section("App") {
                     Button("Server Settings") { showServerSettings = true }
                     Button("Map Key & Disclaimer") { showInfo = true }
-                    LabeledContent("Magnetic variation", value: String(format: "%.1f°", settings.variationDeg))
                 }
 
                 if let errorMessage {

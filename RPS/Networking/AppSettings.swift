@@ -35,8 +35,14 @@ final class AppSettings {
         didSet { defaults.set(variationDeg, forKey: Keys.variationDeg) }
     }
 
-    /// Whether headings are displayed magnetic-first (still shows true
-    /// alongside it).
+    /// Whether headings lead with magnetic rather than true.
+    ///
+    /// Defaults to false - true-first. The course is computed in degrees
+    /// true, the forecast reports wind in degrees true, and the start-line
+    /// bias is worked out in degrees true, so true is the number that agrees
+    /// with everything else on screen. Sailors steering to a bulkhead
+    /// compass want magnetic, hence the switch; the other one is always
+    /// shown underneath either way.
     var useMagnetic: Bool {
         didSet { defaults.set(useMagnetic, forKey: Keys.useMagnetic) }
     }

@@ -49,7 +49,11 @@ final class CourseStateStore {
 
     var activeMarks: [Mark] = []
     var course: [CourseEntry] = []
-    var defaultRounding: Rounding?
+    /// Starts at port rather than unset. Leaving every mark with no rounding
+    /// meant the common case needed a tap before the course meant anything,
+    /// and port is the usual signal - the RC still flies a green flag when
+    /// it isn't, and the signals row is one tap away.
+    var defaultRounding: Rounding? = .port
     var twiceAround = false
     var startUid: Int?
     /// Which unplaced entry a GPS/manual fix should apply to next. Nil means

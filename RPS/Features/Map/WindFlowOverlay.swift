@@ -12,9 +12,10 @@
 //     odds with the marks and legs that genuinely are. A field of faint
 //     tapered streaks reads as weather: ambient, behind everything, clearly
 //     not something you sail to.
-//  2. A Canvas draws fifty particles in one pass. Fifty annotations would be
-//     fifty SwiftUI subtrees over a map that is already re-laying out marks
-//     and polylines.
+//  2. A Canvas draws the whole field in one pass. The same number of map
+//     annotations would be that many SwiftUI subtrees over a map already
+//     re-laying out marks and polylines - which is what makes a field dense
+//     enough to read as weather affordable at all.
 //  3. Wind here is a single direction for the whole visible area - it comes
 //     from one forecast sample, not a grid - so nothing is lost by drawing
 //     it in screen space. Pretending otherwise by geo-anchoring each particle
@@ -30,8 +31,8 @@ struct WindFlowOverlay: View {
     let cameraHeading: Double
 
     /// Seconds for a particle to cross its full travel.
-    private let period: Double = 3.4
-    private let particleCount = 46
+    private let period: Double = 3.8
+    private let particleCount = 130
 
     var body: some View {
         // 30fps: fast enough to read as motion, and this runs for as long as
@@ -59,7 +60,7 @@ struct WindFlowOverlay: View {
         // Travel far enough that particles are always entering from off
         // screen rather than appearing inside it.
         let travel = (size.width + size.height) * 0.75
-        let streak: CGFloat = 26
+        let streak: CGFloat = 22
 
         for i in 0..<particleCount {
             // Deterministic scatter - a fixed field rather than one that
@@ -96,19 +97,19 @@ struct WindFlowOverlay: View {
                 with: .linearGradient(
                     Gradient(colors: [
                         Color.teal.opacity(0),
-                        Color.teal.opacity(0.55 * fade),
+                        Color.teal.opacity(0.5 * fade),
                     ]),
                     startPoint: tail,
                     endPoint: head
                 ),
-                style: StrokeStyle(lineWidth: 1.6, lineCap: .round)
+                style: StrokeStyle(lineWidth: 1.4, lineCap: .round)
             )
 
             // A small bright tip, so the leading end is unambiguous even
             // where streaks cross the course lines.
             context.fill(
-                Path(ellipseIn: CGRect(x: head.x - 1.4, y: head.y - 1.4, width: 2.8, height: 2.8)),
-                with: .color(Color.teal.opacity(0.75 * fade))
+                Path(ellipseIn: CGRect(x: head.x - 1.2, y: head.y - 1.2, width: 2.4, height: 2.4)),
+                with: .color(Color.teal.opacity(0.7 * fade))
             )
         }
     }
