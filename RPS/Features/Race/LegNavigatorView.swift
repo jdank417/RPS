@@ -12,6 +12,7 @@ import SwiftUI
 
 struct LegNavigatorView: View {
     @Environment(CourseStateStore.self) private var course
+    @Environment(WindService.self) private var windService
 
     private var legs: [LegInfo] { course.legComputation.legs }
 
@@ -29,8 +30,14 @@ struct LegNavigatorView: View {
                     set: { course.setCurrentLeg($0) }
                 )) {
                     ForEach(legs) { leg in
-                        LegPage(leg: leg, useMagnetic: course.variationDeg != 0)
-                            .tag(leg.legIndex)
+                        LegPage(
+                            leg: leg,
+                            useMagnetic: course.variationDeg != 0,
+                            wind: windService.wind,
+                            windIsStale: windService.stale,
+                            windAge: windService.ageText
+                        )
+                        .tag(leg.legIndex)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .always))
@@ -44,9 +51,18 @@ struct LegNavigatorView: View {
 private struct LegPage: View {
     let leg: LegInfo
     let useMagnetic: Bool
+    let wind: WindReading?
+    let windIsStale: Bool
+    let windAge: String
 
     var body: some View {
-        VStack(spacing: 28) {
+        ScrollView {
+            content
+        }
+    }
+
+    private var content: some View {
+        VStack(spacing: 24) {
             Spacer(minLength: 8)
 
             VStack(spacing: 4) {
@@ -78,13 +94,47 @@ private struct LegPage: View {
                             statTile(title: "ROUNDING", value: rounding == .starboard ? "S" : "P", unit: roundingWord(rounding))
                         }
                     }
+
+                    windSection
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 24)
         }
         .padding(.horizontal, 24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
+    }
+
+    /// Where the breeze sits on this leg, and what to hang on the boat for
+    /// it. Uses the leg's *true* heading rather than the magnetic one shown
+    /// above: the forecast reports wind in degrees true, and mixing the two
+    /// would put the boat on the wrong tack on paper.
+    @ViewBuilder
+    private var windSection: some View {
+        if let wind, let heading = leg.trueHdg {
+            Divider().padding(.vertical, 4)
+            LegWindPanel(
+                legHeadingDeg: heading,
+                wind: wind,
+                isStale: windIsStale,
+                ageText: windAge
+            )
+        } else if leg.trueHdg != nil {
+            Divider().padding(.vertical, 4)
+            VStack(spacing: 6) {
+                Image(systemName: "wind")
+                    .font(.title3)
+                    .foregroundStyle(.tertiary)
+                Text("No forecast wind yet")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Text("Start GPS on the Race tab — the forecast is fetched for wherever the boat is.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.vertical, 8)
+        }
     }
 
     private var headingBlock: some View {
@@ -123,4 +173,5 @@ private struct LegPage: View {
 #Preview {
     LegNavigatorView()
         .environment(CourseStateStore())
+        .environment(WindService())
 }

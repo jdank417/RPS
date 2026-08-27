@@ -105,6 +105,7 @@ struct RaceModeView: View {
             pin: race.pin,
             committee: race.committee,
             highlightedLegIndex: race.courseStore.currentLegIndex,
+            windFromDeg: race.windService.wind?.fromDeg,
             bottomContentInset: computation.legs.isEmpty ? 0 : legToolbarHeight
         )
         // safeAreaInset rather than a ZStack overlay: this keeps the toolbar

@@ -17,6 +17,10 @@ struct CourseMapView: View {
     var pin: GeoMath.LatLon? = nil
     var committee: GeoMath.LatLon? = nil
     var highlightedLegIndex: Int? = nil
+    /// Direction the wind is blowing *from*, degrees true. Nil when there is
+    /// no forecast yet, which hides the wind overlay entirely rather than
+    /// drawing lines pointing nowhere.
+    var windFromDeg: Double? = nil
     /// Extra bottom inset so overlaid chrome (the leg toolbar in Race Mode)
     /// never sits on top of the course itself.
     var bottomContentInset: CGFloat = 0
@@ -34,6 +38,10 @@ struct CourseMapView: View {
     @State private var fittedSignature: String?
     @State private var followBoat = false
     @State private var hybrid = false
+    @State private var showWind = false
+    /// Tracked so the wind streaks can be regenerated to span whatever is on
+    /// screen rather than a fixed box around the course.
+    @State private var visibleRegion: MKCoordinateRegion?
 
     private var placedPoints: [MapPoint] { mapPoints.compactMap { $0 } }
 
@@ -77,6 +85,7 @@ struct CourseMapView: View {
 
     var body: some View {
         Map(position: $camera) {
+            windLineContent
             courseLineContent
             highlightedLegContent
             startLineContent
@@ -90,6 +99,7 @@ struct CourseMapView: View {
             // re-render the whole map for a rotation nobody can see.
             let heading = context.camera.heading
             if abs(heading - cameraHeading) > 1 { cameraHeading = heading }
+            visibleRegion = context.region
         }
         .mapStyle(hybrid ? .hybrid(elevation: .flat) : .standard(elevation: .flat, pointsOfInterest: .excludingAll))
         .mapControls {
@@ -130,6 +140,11 @@ struct CourseMapView: View {
             mapButton(systemImage: hybrid ? "globe.americas.fill" : "map", isOn: hybrid, label: "Satellite") {
                 hybrid.toggle()
             }
+
+            mapButton(systemImage: "wind", isOn: showWind, label: "Show wind") {
+                showWind.toggle()
+            }
+            .disabled(windFromDeg == nil)
         }
         .padding(.top, 8)
         .padding(.trailing, 12)
@@ -150,6 +165,51 @@ struct CourseMapView: View {
     }
 
     // MARK: - Map content
+
+    /// Parallel streaks running the way the wind blows, spanning whatever is
+    /// on screen.
+    ///
+    /// Drawn across the whole view rather than as one arrow in a corner
+    /// because the useful comparison is against the *course*: laid over the
+    /// legs, it is immediately obvious which of them are beats and which are
+    /// reaches, without doing any arithmetic on bearings.
+    private var windLines: [[CLLocationCoordinate2D]] {
+        guard showWind, let windFromDeg, let region = visibleRegion else { return [] }
+
+        let center = region.center
+        // Degrees of latitude are ~60nm; longitude shrinks with latitude.
+        let latNm = region.span.latitudeDelta * 60
+        let lonNm = region.span.longitudeDelta * 60 * cos(center.latitude * .pi / 180)
+        let diagonal = (latNm * latNm + lonNm * lonNm).squareRoot()
+        guard diagonal.isFinite, diagonal > 0 else { return [] }
+
+        let half = diagonal / 2
+        let count = 9
+        let spacing = diagonal / Double(count - 1)
+        let downwind = windFromDeg + 180
+        let across = windFromDeg + 90
+
+        return (0..<count).map { i in
+            let offset = (Double(i) - Double(count - 1) / 2) * spacing
+            let mid = GeoMath.destinationPoint(
+                lat: center.latitude, lon: center.longitude, bearingDeg: across, distNm: offset
+            )
+            let from = GeoMath.destinationPoint(lat: mid.lat, lon: mid.lon, bearingDeg: windFromDeg, distNm: half)
+            let to = GeoMath.destinationPoint(lat: mid.lat, lon: mid.lon, bearingDeg: downwind, distNm: half)
+            return [from.coordinate, to.coordinate]
+        }
+    }
+
+    @MapContentBuilder
+    private var windLineContent: some MapContent {
+        ForEach(Array(windLines.enumerated()), id: \.offset) { _, line in
+            MapPolyline(coordinates: line)
+                .stroke(
+                    Color.teal.opacity(0.45),
+                    style: StrokeStyle(lineWidth: 1.5, dash: [10, 8])
+                )
+        }
+    }
 
     @MapContentBuilder
     private var courseLineContent: some MapContent {
