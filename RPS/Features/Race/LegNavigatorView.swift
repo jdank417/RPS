@@ -34,8 +34,7 @@ struct LegNavigatorView: View {
                             leg: leg,
                             useMagnetic: course.variationDeg != 0,
                             wind: windService.wind,
-                            windIsStale: windService.stale,
-                            windAge: windService.ageText
+                            windIsStale: windService.stale
                         )
                         .tag(leg.legIndex)
                     }
@@ -53,105 +52,154 @@ private struct LegPage: View {
     let useMagnetic: Bool
     let wind: WindReading?
     let windIsStale: Bool
-    let windAge: String
 
     var body: some View {
-        ScrollView {
-            content
-        }
-    }
-
-    private var content: some View {
-        VStack(spacing: 24) {
-            Spacer(minLength: 8)
-
-            VStack(spacing: 4) {
-                Text("LEG \(leg.legIndex + 1)")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
-                    .tracking(2)
-                Text("\(leg.fromLabel) → \(leg.toLabel)")
-                    .font(.title3.weight(.semibold))
-                Text(leg.toMark.name)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
+        // Deliberately no ScrollView: everything about this page is meant to
+        // be read in a glance from the helm, and a page you have to scroll
+        // is a page whose bottom half does not exist mid-race. It is sized
+        // to fit instead, and shrinks rather than overflows.
+        VStack(spacing: 14) {
+            header
 
             if leg.missing {
+                Spacer()
                 ContentUnavailableView(
                     "Position missing",
                     systemImage: "questionmark.diamond",
                     description: Text("Set a position for \(leg.toLabel) in the course builder.")
                 )
-                .frame(maxHeight: 220)
+                Spacer()
             } else {
-                VStack(spacing: 18) {
+                // Heading and the wind picture side by side rather than
+                // stacked: they are read together ("047, and the breeze is
+                // on my left"), and stacking them was what pushed the page
+                // past one screen.
+                HStack(alignment: .center, spacing: 16) {
                     headingBlock
-
-                    HStack(spacing: 24) {
-                        statTile(title: "DISTANCE", value: String(format: "%.2f", leg.distNm ?? 0), unit: "nm")
-                        if let rounding = leg.rounding {
-                            statTile(title: "ROUNDING", value: rounding == .starboard ? "S" : "P", unit: roundingWord(rounding))
-                        }
-                    }
-
-                    windSection
+                        .frame(maxWidth: .infinity)
+                    windGraphic
                 }
-            }
 
-            Spacer(minLength: 24)
+                statsRow
+                windCallout
+                Spacer(minLength: 0)
+            }
         }
-        .padding(.horizontal, 24)
-        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    /// Where the breeze sits on this leg, and what to hang on the boat for
-    /// it. Uses the leg's *true* heading rather than the magnetic one shown
-    /// above: the forecast reports wind in degrees true, and mixing the two
-    /// would put the boat on the wrong tack on paper.
+    private var header: some View {
+        VStack(spacing: 2) {
+            Text("LEG \(leg.legIndex + 1)")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.secondary)
+                .tracking(2)
+            Text("\(leg.fromLabel) → \(leg.toLabel)")
+                .font(.title3.weight(.semibold))
+            Text(leg.toMark.name)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    /// The wind rose, or a compact placeholder holding the same footprint so
+    /// the layout doesn't jump when a forecast arrives.
     @ViewBuilder
-    private var windSection: some View {
+    private var windGraphic: some View {
         if let wind, let heading = leg.trueHdg {
-            Divider().padding(.vertical, 4)
-            LegWindPanel(
-                legHeadingDeg: heading,
-                wind: wind,
-                isStale: windIsStale,
-                ageText: windAge
-            )
-        } else if leg.trueHdg != nil {
-            Divider().padding(.vertical, 4)
-            VStack(spacing: 6) {
+            WindRoseView(legHeadingDeg: heading, windFromDeg: wind.fromDeg, size: 118)
+        } else {
+            VStack(spacing: 4) {
                 Image(systemName: "wind")
-                    .font(.title3)
+                    .font(.title2)
                     .foregroundStyle(.tertiary)
-                Text("No forecast wind yet")
-                    .font(.subheadline)
+                Text("No wind\nforecast")
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
-                Text("Start GPS on the Race tab — the forecast is fetched for wherever the boat is.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
                     .multilineTextAlignment(.center)
             }
+            .frame(width: 118, height: 118)
+        }
+    }
+
+    private var statsRow: some View {
+        HStack(spacing: 10) {
+            statTile(title: "DISTANCE", value: String(format: "%.2f", leg.distNm ?? 0), unit: "nm")
+            if let rounding = leg.rounding {
+                statTile(
+                    title: "ROUNDING",
+                    value: rounding == .starboard ? "S" : "P",
+                    unit: rounding == .starboard ? "starboard" : "port"
+                )
+            }
+        }
+    }
+
+    /// One line of sail advice under the numbers. Uses the leg's *true*
+    /// heading, not the magnetic one shown above: the forecast reports wind
+    /// in degrees true, and mixing the two would put the boat on the wrong
+    /// tack on paper.
+    @ViewBuilder
+    private var windCallout: some View {
+        if let wind, let heading = leg.trueHdg {
+            let plan = SailPlan(legHeadingDeg: heading, windFromDeg: wind.fromDeg)
+            VStack(spacing: 3) {
+                HStack(spacing: 8) {
+                    Text("\(Int(abs(plan.twaDeg).rounded()))°")
+                        .font(.subheadline.weight(.bold))
+                        .monospacedDigit()
+                    Text(plan.tack == .port ? "PORT" : "STBD")
+                        .font(.caption2.weight(.heavy))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1.5)
+                        .background(
+                            plan.tack == .port
+                                ? Color(red: 0.816, green: 0.126, blue: 0.122)
+                                : Color(red: 0.086, green: 0.478, blue: 0.239),
+                            in: Capsule()
+                        )
+                    Text(plan.pointOfSail)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Text(plan.sails)
+                    .font(.caption)
+                    .foregroundStyle(plan.isBeat ? Color.orange : Color.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text(
+                    "Forecast \(Int(wind.fromDeg.rounded()))° · \(Int(wind.speedKts.rounded())) kt"
+                    + (windIsStale ? " · stale" : "")
+                )
+                .font(.caption2)
+                .foregroundStyle(windIsStale ? Color.orange : Color.secondary)
+            }
+            .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
+            .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
         }
     }
 
     private var headingBlock: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 2) {
             Text(GeoMath.fmtHeading(leg.magHdg ?? leg.trueHdg ?? 0))
-                .font(.system(size: 88, weight: .heavy, design: .rounded))
+                .font(.system(size: 62, weight: .heavy, design: .rounded))
                 .monospacedDigit()
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 .contentTransition(.numericText())
             Text("MAGNETIC")
-                .font(.caption.weight(.bold))
+                .font(.caption2.weight(.bold))
                 .foregroundStyle(.secondary)
                 .tracking(2)
             if let trueHdg = leg.trueHdg {
                 Text("\(GeoMath.fmtHeading(trueHdg)) true")
-                    .font(.headline)
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             }
         }
@@ -161,11 +209,11 @@ private struct LegPage: View {
     private func statTile(title: String, value: String, unit: String) -> some View {
         VStack(spacing: 4) {
             Text(title).font(.caption2.weight(.bold)).foregroundStyle(.secondary).tracking(1.5)
-            Text(value).font(.system(size: 36, weight: .bold, design: .rounded)).monospacedDigit()
-            Text(unit).font(.caption).foregroundStyle(.secondary)
+            Text(value).font(.system(size: 30, weight: .bold, design: .rounded)).monospacedDigit()
+            Text(unit).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
+        .padding(.vertical, 9)
         .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
     }
 }
