@@ -196,7 +196,11 @@ struct LegWindPanel: View {
                 + (isStale ? " · stale \(ageText)" : ageText.isEmpty ? "" : " · \(ageText)")
             )
             .font(.caption2)
-            .foregroundStyle(isStale ? .orange : .tertiary)
+            // Both branches have to be the same type, so this is Color on
+            // each side. `.tertiary` reads better here but is a
+            // HierarchicalShapeStyle, not a Color, and mixing the two in a
+            // ternary doesn't type-check.
+            .foregroundStyle(isStale ? Color.orange : Color.secondary)
             .multilineTextAlignment(.center)
         }
     }
