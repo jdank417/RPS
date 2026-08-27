@@ -39,9 +39,6 @@ struct CourseMapView: View {
     @State private var followBoat = false
     @State private var hybrid = false
     @State private var showWind = false
-    /// Tracked so the wind streaks can be regenerated to span whatever is on
-    /// screen rather than a fixed box around the course.
-    @State private var visibleRegion: MKCoordinateRegion?
 
     private var placedPoints: [MapPoint] { mapPoints.compactMap { $0 } }
 
@@ -85,7 +82,6 @@ struct CourseMapView: View {
 
     var body: some View {
         Map(position: $camera) {
-            windLineContent
             courseLineContent
             highlightedLegContent
             startLineContent
@@ -99,7 +95,6 @@ struct CourseMapView: View {
             // re-render the whole map for a rotation nobody can see.
             let heading = context.camera.heading
             if abs(heading - cameraHeading) > 1 { cameraHeading = heading }
-            visibleRegion = context.region
         }
         .mapStyle(hybrid ? .hybrid(elevation: .flat) : .standard(elevation: .flat, pointsOfInterest: .excludingAll))
         .mapControls {
@@ -107,6 +102,14 @@ struct CourseMapView: View {
             MapScaleView()
         }
         .safeAreaPadding(.bottom, bottomContentInset)
+        .overlay {
+            if showWind, let windFromDeg {
+                WindFlowOverlay(
+                    windFromDeg: windFromDeg,
+                    cameraHeading: cameraHeading
+                )
+            }
+        }
         .overlay(alignment: .topTrailing) { mapButtons }
         .onAppear { fitIfCourseChanged() }
         .onChange(of: courseSignature) { _, _ in fitIfCourseChanged() }
@@ -165,74 +168,6 @@ struct CourseMapView: View {
     }
 
     // MARK: - Map content
-
-    /// Parallel streaks running the way the wind blows, spanning whatever is
-    /// on screen, plus a drifting arrow on each.
-    ///
-    /// Drawn across the whole view rather than as one arrow in a corner
-    /// because the useful comparison is against the *course*: laid over the
-    /// legs, it is immediately obvious which of them are beats and which are
-    /// reaches, without doing any arithmetic on bearings.
-    private struct WindStreak: Identifiable {
-        let id: Int
-        let line: [CLLocationCoordinate2D]
-        /// Where the drifting arrow sits, a third of the way down the streak.
-        let arrowAt: CLLocationCoordinate2D
-    }
-
-    private var windStreaks: [WindStreak] {
-        guard showWind, let windFromDeg, let region = visibleRegion else { return [] }
-
-        let center = region.center
-        // Degrees of latitude are ~60nm; longitude shrinks with latitude.
-        let latNm = region.span.latitudeDelta * 60
-        let lonNm = region.span.longitudeDelta * 60 * cos(center.latitude * .pi / 180)
-        let diagonal = (latNm * latNm + lonNm * lonNm).squareRoot()
-        guard diagonal.isFinite, diagonal > 0 else { return [] }
-
-        let half = diagonal / 2
-        let count = 7
-        let spacing = diagonal / Double(count - 1)
-        let downwind = windFromDeg + 180
-        let across = windFromDeg + 90
-
-        return (0..<count).map { i in
-            let offset = (Double(i) - Double(count - 1) / 2) * spacing
-            let mid = GeoMath.destinationPoint(
-                lat: center.latitude, lon: center.longitude, bearingDeg: across, distNm: offset
-            )
-            let from = GeoMath.destinationPoint(lat: mid.lat, lon: mid.lon, bearingDeg: windFromDeg, distNm: half)
-            let to = GeoMath.destinationPoint(lat: mid.lat, lon: mid.lon, bearingDeg: downwind, distNm: half)
-            return WindStreak(id: i, line: [from.coordinate, to.coordinate], arrowAt: mid.coordinate)
-        }
-    }
-
-    @MapContentBuilder
-    private var windLineContent: some MapContent {
-        ForEach(windStreaks) { streak in
-            MapPolyline(coordinates: streak.line)
-                .stroke(
-                    Color.teal.opacity(0.35),
-                    style: StrokeStyle(lineWidth: 1.5, dash: [10, 8])
-                )
-        }
-        ForEach(windStreaks) { streak in
-            Annotation("", coordinate: streak.arrowAt, anchor: .center) {
-                // The drift is animated inside the annotation rather than by
-                // redrawing the map: a moving dash phase on the polylines
-                // would re-render every piece of map content several times a
-                // second, which is what the leg-computation memoisation was
-                // added to stop. Each arrow animates itself instead, and the
-                // map is none the wiser.
-                DriftingWindArrow(
-                    rotationDeg: (windFromDeg ?? 0) + 180 - cameraHeading,
-                    phase: Double(streak.id)
-                )
-                .allowsHitTesting(false)
-            }
-            .annotationTitles(.hidden)
-        }
-    }
 
     @MapContentBuilder
     private var courseLineContent: some MapContent {
@@ -390,49 +325,5 @@ extension GeoMath.LatLon {
 private extension Array {
     subscript(safe index: Int) -> Element? {
         indices.contains(index) ? self[index] : nil
-    }
-}
-
-/// A wind arrow that drifts downwind and fades, on a loop.
-///
-/// The motion is the point: a static dashed line reads as a boundary or a
-/// route, and several sailors looking at the first version of this asked
-/// which way the wind was going. Something visibly travelling along the line
-/// answers that without a legend.
-private struct DriftingWindArrow: View {
-    /// Screen rotation for the arrow: the direction the wind is blowing
-    /// *towards*, corrected for the map's own rotation.
-    let rotationDeg: Double
-    /// Staggers neighbouring streaks so they don't pulse in lockstep, which
-    /// reads as a flashing grid rather than as flow.
-    let phase: Double
-
-    private let period: Double = 2.6
-    private let travel: CGFloat = 34
-
-    var body: some View {
-        // Capped well below the display refresh rate: this is ambient motion
-        // on up to seven annotations at once, and it costs battery on a phone
-        // that has to last a whole race.
-        TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: false)) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate + phase * 0.37
-            let cycle = (t.truncatingRemainder(dividingBy: period)) / period
-
-            ZStack {
-                Image(systemName: "arrowtriangle.up.fill")
-                    .font(.system(size: 12, weight: .black))
-                    .foregroundStyle(Color.teal)
-                    .shadow(color: .white.opacity(0.8), radius: 1)
-                    // Starts behind the anchor and travels through it.
-                    .offset(y: travel * (0.5 - CGFloat(cycle)))
-                    // Fades in and out at the ends of its run so arrows
-                    // appear to stream past rather than teleport back.
-                    .opacity(sin(cycle * .pi))
-            }
-            .frame(width: travel, height: travel)
-            // Rotating the frame rotates the offset with it, so the arrow
-            // travels along the wind rather than orbiting the anchor.
-            .rotationEffect(.degrees(rotationDeg))
-        }
     }
 }

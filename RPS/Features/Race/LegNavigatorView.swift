@@ -13,8 +13,16 @@ import SwiftUI
 struct LegNavigatorView: View {
     @Environment(CourseStateStore.self) private var course
     @Environment(WindService.self) private var windService
+    @Environment(LivePositionStore.self) private var liveStore
 
     private var legs: [LegInfo] { course.legComputation.legs }
+
+    /// Course still to sail from the start of `index`, this leg included.
+    /// What's left is the number that matters when deciding whether to
+    /// change a headsail; how far you've already come is history.
+    private func remainingNm(from index: Int) -> Double {
+        legs.filter { $0.legIndex >= index }.compactMap(\.distNm).reduce(0, +)
+    }
 
     var body: some View {
         Group {
@@ -32,7 +40,10 @@ struct LegNavigatorView: View {
                     ForEach(legs) { leg in
                         LegPage(
                             leg: leg,
-                            useMagnetic: course.variationDeg != 0,
+                            legCount: legs.count,
+                            remainingNm: remainingNm(from: leg.legIndex),
+                            totalNm: course.legComputation.totalNm,
+                            speedKts: liveStore.fix?.speedKts,
                             wind: windService.wind,
                             windIsStale: windService.stale
                         )
@@ -49,7 +60,13 @@ struct LegNavigatorView: View {
 
 private struct LegPage: View {
     let leg: LegInfo
-    let useMagnetic: Bool
+    let legCount: Int
+    let remainingNm: Double
+    let totalNm: Double
+    /// Live speed over ground, when GPS is running - turns the leg's
+    /// distance into a time, which is the form the question is usually
+    /// asked in ("do we make the gun?").
+    let speedKts: Double?
     let wind: WindReading?
     let windIsStale: Bool
 
@@ -74,14 +91,20 @@ private struct LegPage: View {
                 // stacked: they are read together ("047, and the breeze is
                 // on my left"), and stacking them was what pushed the page
                 // past one screen.
-                HStack(alignment: .center, spacing: 16) {
+                Spacer(minLength: 0)
+
+                HStack(alignment: .center, spacing: 14) {
                     headingBlock
                         .frame(maxWidth: .infinity)
                     windGraphic
                 }
 
+                Spacer(minLength: 0)
+
                 statsRow
                 windCallout
+                courseProgress
+
                 Spacer(minLength: 0)
             }
         }
@@ -93,7 +116,7 @@ private struct LegPage: View {
 
     private var header: some View {
         VStack(spacing: 2) {
-            Text("LEG \(leg.legIndex + 1)")
+            Text("LEG \(leg.legIndex + 1) OF \(legCount)")
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(.secondary)
                 .tracking(2)
@@ -111,7 +134,7 @@ private struct LegPage: View {
     @ViewBuilder
     private var windGraphic: some View {
         if let wind, let heading = leg.trueHdg {
-            WindRoseView(legHeadingDeg: heading, windFromDeg: wind.fromDeg, size: 118)
+            WindRoseView(legHeadingDeg: heading, windFromDeg: wind.fromDeg, size: 132)
         } else {
             VStack(spacing: 4) {
                 Image(systemName: "wind")
@@ -122,21 +145,88 @@ private struct LegPage: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
-            .frame(width: 118, height: 118)
+            .frame(width: 132, height: 132)
         }
     }
 
+    /// Distance, rounding and time-on-leg. Three tiles rather than one
+    /// stretched across the width: a single full-bleed DISTANCE panel was
+    /// most of the page's wasted space, and the two beside it are things
+    /// actually wanted on the way to the mark.
     private var statsRow: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             statTile(title: "DISTANCE", value: String(format: "%.2f", leg.distNm ?? 0), unit: "nm")
-            if let rounding = leg.rounding {
-                statTile(
-                    title: "ROUNDING",
-                    value: rounding == .starboard ? "S" : "P",
-                    unit: rounding == .starboard ? "starboard" : "port"
-                )
-            }
+
+            statTile(
+                title: "ROUNDING",
+                value: roundingValue,
+                unit: roundingUnit
+            )
+
+            statTile(title: "TIME", value: legTimeValue, unit: legTimeUnit)
         }
+    }
+
+    private var roundingValue: String {
+        switch leg.rounding {
+        case .starboard: return "S"
+        case .port: return "P"
+        case nil: return "–"
+        }
+    }
+
+    private var roundingUnit: String {
+        switch leg.rounding {
+        case .starboard: return "starboard"
+        case .port: return "port"
+        case nil: return "not set"
+        }
+    }
+
+    /// Time to sail this leg at the speed being made right now. Blank rather
+    /// than a guess when the boat isn't moving - a number extrapolated from
+    /// a drift is worse than no number.
+    private var legTimeValue: String {
+        guard let speedKts, speedKts >= 0.5, let dist = leg.distNm else { return "–" }
+        let minutes = (dist / speedKts) * 60
+        if minutes < 60 { return "\(Int(minutes.rounded()))" }
+        let hours = Int(minutes / 60)
+        let rest = Int(minutes.truncatingRemainder(dividingBy: 60).rounded())
+        return "\(hours):\(String(format: "%02d", rest))"
+    }
+
+    private var legTimeUnit: String {
+        guard let speedKts, speedKts >= 0.5, let dist = leg.distNm else { return "need speed" }
+        let minutes = (dist / speedKts) * 60
+        return minutes < 60
+            ? String(format: "min at %.1f kt", speedKts)
+            : String(format: "h:mm at %.1f kt", speedKts)
+    }
+
+    /// How much course is left from here. A thin bar rather than another
+    /// tile: it's orientation, not a number to act on.
+    private var courseProgress: some View {
+        VStack(spacing: 5) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color(uiColor: .tertiarySystemFill))
+                    Capsule()
+                        .fill(Color.accentColor)
+                        .frame(width: geo.size.width * remainingFraction)
+                }
+            }
+            .frame(height: 4)
+
+            Text(String(format: "%.2f nm remaining of %.2f nm course", remainingNm, totalNm))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var remainingFraction: CGFloat {
+        guard totalNm > 0 else { return 0 }
+        return CGFloat(min(max(remainingNm / totalNm, 0), 1))
     }
 
     /// One line of sail advice under the numbers. Uses the leg's *true*
@@ -208,9 +298,18 @@ private struct LegPage: View {
 
     private func statTile(title: String, value: String, unit: String) -> some View {
         VStack(spacing: 4) {
-            Text(title).font(.caption2.weight(.bold)).foregroundStyle(.secondary).tracking(1.5)
+            Text(title)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.secondary)
+                .tracking(1)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             Text(value).font(.system(size: 30, weight: .bold, design: .rounded)).monospacedDigit()
-            Text(unit).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            Text(unit)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 9)
@@ -222,4 +321,5 @@ private struct LegPage: View {
     LegNavigatorView()
         .environment(CourseStateStore())
         .environment(WindService())
+        .environment(LivePositionStore())
 }
