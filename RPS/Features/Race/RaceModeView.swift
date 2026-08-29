@@ -38,6 +38,8 @@ struct RaceModeView: View {
     @Environment(RaceViewModel.self) private var race
     @Environment(LivePositionStore.self) private var liveStore
     @Environment(TidalCurrentService.self) private var tidalService
+    @Environment(StartSequenceViewModel.self) private var sequence
+    @Environment(RaceLiveActivityManager.self) private var liveActivity
     @Binding var selectedSegment: Segment
 
     var body: some View {
@@ -90,13 +92,47 @@ struct RaceModeView: View {
         }
         // Not userInitiated: if the sailor deliberately stopped GPS, coming
         // back to this tab must not silently restart it.
-        .onAppear { liveStore.start(userInitiated: false) }
+        .onAppear {
+            liveStore.start(userInitiated: false)
+            syncLiveActivity()
+        }
         .onChange(of: liveStore.fix) { _, fix in
             race.refreshWindIfNeeded()
             if let fix {
                 Task { await tidalService.refresh(lat: fix.lat, lon: fix.lon) }
             }
+            syncLiveActivity()
         }
+        // Ticks every 250ms while a sequence is armed - cheap to call this
+        // often since RaceLiveActivityManager only actually pushes to the
+        // system when something worth showing has changed.
+        .onChange(of: sequence.secondsToStart) { _, _ in syncLiveActivity() }
+    }
+
+    /// Mirrors the start sequence's own lifecycle onto the Lock Screen:
+    /// armed means started, stopped means ended. Leg/bearing/wind come
+    /// from whatever the race view model can currently derive from the
+    /// live fix - nil once there's no fix or no leg being sailed yet,
+    /// which the activity's view already handles by simply not showing
+    /// that row.
+    private func syncLiveActivity() {
+        var legLabel: String?
+        if let idx = race.courseStore.currentLegIndex, let leg = race.courseStore.legComputation.legs[safe: idx] {
+            legLabel = "\(leg.fromLabel) → \(leg.toLabel)"
+        }
+
+        liveActivity.sync(
+            clubName: race.courseStore.rcClubName ?? race.courseStore.rcListName ?? "RPS",
+            running: sequence.running,
+            startAt: sequence.startAt,
+            flag: sequence.flag,
+            isRacing: sequence.phase == .racing,
+            legLabel: legLabel,
+            distNm: race.vector?.distNm,
+            bearingTrue: race.vector?.bearingTrue,
+            windFromDeg: race.windService.wind?.fromDeg,
+            windSpeedKts: race.windService.wind?.speedKts
+        )
     }
 
     /// Height the leg toolbar occupies, handed to the map so it insets its
@@ -475,4 +511,5 @@ private extension Array {
         .environment(courseStore)
         .environment(TidalCurrentService())
         .environment(StartSequenceViewModel())
+        .environment(RaceLiveActivityManager())
 }

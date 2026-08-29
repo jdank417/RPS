@@ -23,6 +23,7 @@ struct RPSApp: App {
     @State private var tidalCurrentService: TidalCurrentService
     @State private var sequenceViewModel: StartSequenceViewModel
     @State private var raceViewModel: RaceViewModel
+    @State private var liveActivityManager: RaceLiveActivityManager
 
     init() {
         let settings = AppSettings.shared
@@ -38,6 +39,7 @@ struct RPSApp: App {
         _tidalCurrentService = State(initialValue: TidalCurrentService())
         _sequenceViewModel = State(initialValue: StartSequenceViewModel())
         _raceViewModel = State(initialValue: RaceViewModel(courseStore: courseStore, liveStore: liveStore, windService: windService))
+        _liveActivityManager = State(initialValue: RaceLiveActivityManager())
     }
 
     var body: some Scene {
@@ -51,6 +53,7 @@ struct RPSApp: App {
                 .environment(tidalCurrentService)
                 .environment(sequenceViewModel)
                 .environment(raceViewModel)
+                .environment(liveActivityManager)
         }
     }
 }
