@@ -297,6 +297,25 @@ final class CourseStateStore {
         RPS.isStartEntry(entry, index: index, startUid: startUid)
     }
 
+    /// The course's current start entry, by the same rule the leg
+    /// computation uses: whichever entry `startUid` names, or — before one
+    /// is chosen — a leading mark whose own name says "start".
+    var startEntry: CourseEntry? {
+        for (index, entry) in course.enumerated() where isStartEntry(entry, index: index) {
+            return entry
+        }
+        return nil
+    }
+
+    /// True once the start is tied to a charted (non-portable) mark with a
+    /// known position, set via `setStartFromMark`. A charted mark's
+    /// position is on the chart already — Race Mode should only need the
+    /// committee boat pinged, never the pin end too.
+    var startIsChartedMark: Bool {
+        guard let entry = startEntry else { return false }
+        return !entry.mark.portable && entry.mark.lat != nil && entry.mark.lon != nil
+    }
+
     func choosePositionTarget(uid: Int) {
         positionTargetUid = positionTargetUid == uid ? nil : uid
         if let uid = positionTargetUid, let target = course.first(where: { $0.uid == uid }) {
@@ -397,6 +416,24 @@ final class CourseStateStore {
         positionTargetUid = nil
         setStatus("Start set at \(mark.code) — \(mark.name).")
         return true
+    }
+
+    /// Marks the start as something to be pinged live on the water, rather
+    /// than tied to a charted mark. Reuses the current start entry when
+    /// there is one — swapping a charted mark back out for a placeholder —
+    /// so switching the choice never leaves an orphaned entry behind.
+    func setStartToPing() {
+        let ownStart = activeMarks.first { $0.portable && $0.name.range(of: "start", options: .caseInsensitive) != nil }
+
+        if let entry = startEntry, !entry.mark.portable, let idx = course.firstIndex(where: { $0.uid == entry.uid }) {
+            course[idx].mark = ownStart ?? Mark.syntheticStart()
+            course[idx].overrideLat = nil
+            course[idx].overrideLon = nil
+            startUid = course[idx].uid
+        } else {
+            startUid = ensureStartEntry().uid
+        }
+        setStatus("Start will be pinged live — use \"Ping Pin\" in Race Mode.")
     }
 
     // MARK: - Commit

@@ -36,9 +36,13 @@ final class RaceViewModel {
     let liveStore: LivePositionStore
     let windService: WindService
 
-    /// The two pinged GPS fixes that define the start line, stamped by the
-    /// "Ping Pin" / "Ping Committee Boat" buttons.
-    private(set) var pin: GeoMath.LatLon?
+    /// The pinned GPS fix for the pin end, when the start isn't a charted
+    /// mark. Ignored in favour of the course's own position whenever it is
+    /// — see `pin` below.
+    private var pingedPin: GeoMath.LatLon?
+    /// The pinged GPS fix for the committee-boat end, stamped by "Ping
+    /// Committee Boat". Always a live ping: a boat, unlike a charted mark,
+    /// never has a position worth trusting from the chart.
     private(set) var committee: GeoMath.LatLon?
 
     init(courseStore: CourseStateStore, liveStore: LivePositionStore, windService: WindService) {
@@ -49,9 +53,23 @@ final class RaceViewModel {
 
     // MARK: - Start line
 
+    /// The pin end of the start line. When the course's start is a charted
+    /// mark, its position is read straight from the course rather than
+    /// waiting on a ping the mark doesn't need — the "Ping Pin" control is
+    /// hidden for the same reason. Otherwise this is whatever was last
+    /// pinged live.
+    var pin: GeoMath.LatLon? {
+        if courseStore.startIsChartedMark,
+           let entry = courseStore.startEntry,
+           let position = resolvedPosition(entry) {
+            return GeoMath.LatLon(lat: position.lat, lon: position.lon)
+        }
+        return pingedPin
+    }
+
     func pingPin() {
         guard let fix = liveStore.fix else { return }
-        pin = GeoMath.LatLon(lat: fix.lat, lon: fix.lon)
+        pingedPin = GeoMath.LatLon(lat: fix.lat, lon: fix.lon)
     }
 
     func pingCommittee() {
@@ -60,7 +78,7 @@ final class RaceViewModel {
     }
 
     func clearLine() {
-        pin = nil
+        pingedPin = nil
         committee = nil
     }
 

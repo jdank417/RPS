@@ -330,14 +330,30 @@ private struct StartLineView: View {
     @Environment(RaceViewModel.self) private var race
     @Environment(LivePositionStore.self) private var liveStore
 
+    private var startIsChartedMark: Bool { race.courseStore.startIsChartedMark }
+
+    /// "Clear Line" only makes sense for something that was pinged. A
+    /// charted pin isn't pinged data — there's nothing there to clear, and
+    /// it stays put regardless — so it doesn't keep the button around on
+    /// its own.
+    private var canClearLine: Bool {
+        race.committee != nil || (!startIsChartedMark && race.pin != nil)
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                HStack(spacing: 12) {
-                    pingButton("Ping Pin", systemImage: "mappin.circle.fill", isSet: race.pin != nil) { race.pingPin() }
+                if startIsChartedMark {
+                    chartedPinCard
                     pingButton("Ping Committee Boat", systemImage: "flag.circle.fill", isSet: race.committee != nil) { race.pingCommittee() }
+                } else {
+                    HStack(spacing: 12) {
+                        pingButton("Ping Pin", systemImage: "mappin.circle.fill", isSet: race.pin != nil) { race.pingPin() }
+                        pingButton("Ping Committee Boat", systemImage: "flag.circle.fill", isSet: race.committee != nil) { race.pingCommittee() }
+                    }
                 }
-                if race.pin != nil || race.committee != nil {
+
+                if canClearLine {
                     Button(role: .destructive) { race.clearLine() } label: {
                         Text("Clear Line").frame(maxWidth: .infinity)
                     }
@@ -347,7 +363,9 @@ private struct StartLineView: View {
                 if let bias = race.lineBias {
                     biasCard(bias)
                 } else {
-                    Text("Ping both ends of the line to see bias. The wind direction is inferred from the first leg, so plot a course first.")
+                    Text(startIsChartedMark
+                        ? "Ping the committee boat to see bias. The wind direction is inferred from the first leg, so plot a course first."
+                        : "Ping both ends of the line to see bias. The wind direction is inferred from the first leg, so plot a course first.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -360,6 +378,26 @@ private struct StartLineView: View {
             }
             .padding()
         }
+    }
+
+    /// The charted mark standing in as the pin end — no ping needed, just a
+    /// statement of what it is.
+    private var chartedPinCard: some View {
+        VStack(spacing: 6) {
+            Label(chartedPinLabel, systemImage: "mappin.circle.fill")
+                .font(.headline)
+            Text("Pin end is a charted mark — its position is already known.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding()
+        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var chartedPinLabel: String {
+        guard let entry = race.courseStore.startEntry else { return "Pin" }
+        return "\(entry.mark.code) — \(entry.mark.name)"
     }
 
     private func pingButton(_ title: String, systemImage: String, isSet: Bool, action: @escaping () -> Void) -> some View {

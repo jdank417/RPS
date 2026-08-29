@@ -42,6 +42,13 @@ struct CourseBuilderView: View {
     @State private var placingEntry: CourseEntry?
     @State private var isLoadingMarks = false
     @State private var errorMessage: String?
+    /// Tracks a start-line choice the sailor just made in the UI before the
+    /// store reflects it — picking "Charted mark" shows the mark picker
+    /// immediately, without waiting on a mark to actually be chosen (which
+    /// is the only thing that changes `course.startIsChartedMark`). Cleared
+    /// once the store agrees, so the control never fights a later change
+    /// made some other way (e.g. swiping a row to "Start").
+    @State private var startChoiceOverride: StartLineChoice?
 
     var onPlotCourse: (() -> Void)?
 
@@ -49,6 +56,7 @@ struct CourseBuilderView: View {
         NavigationStack {
             List {
                 raceSection
+                startLineSection
                 signalsSection
 
                 if let message = course.statusMessage {
@@ -210,6 +218,83 @@ struct CourseBuilderView: View {
 
     private var bootstrapListName: String? {
         appState.bootstrap?.markLists.first { $0.id == activeMarkListId }?.name
+    }
+
+    /// Whether the pin end of the start line is a fixed, charted mark or
+    /// something to be pinged live. Asked up front, near the top of the
+    /// builder, because it changes what Race Mode's start-line panel offers
+    /// later: a charted mark's position is already known, so only the
+    /// committee boat — a boat, not a fixed object — genuinely needs a ping.
+    private enum StartLineChoice: Hashable { case charted, ping }
+
+    private var startLineChoice: StartLineChoice {
+        startChoiceOverride ?? (course.startIsChartedMark ? .charted : .ping)
+    }
+
+    private var startLineChoiceBinding: Binding<StartLineChoice> {
+        Binding(
+            get: { startLineChoice },
+            set: { newValue in
+                startChoiceOverride = newValue
+                if newValue == .ping {
+                    withAnimation(CourseMotion.start) { course.setStartToPing() }
+                    startChoiceOverride = nil
+                }
+            }
+        )
+    }
+
+    /// Charted marks with a known position — the only marks that can stand
+    /// in as a fixed pin end. Portable marks have nothing to pick: their
+    /// whole point is that the RC sets them on the day.
+    private var chartedStartCandidates: [Mark] {
+        course.activeMarks.filter { !$0.portable && $0.lat != nil && $0.lon != nil }
+    }
+
+    private var chartedStartMarkBinding: Binding<Mark?> {
+        Binding(
+            get: { course.startIsChartedMark ? course.startEntry?.mark : nil },
+            set: { newValue in
+                guard let newValue else { return }
+                withAnimation(CourseMotion.start) {
+                    if course.setStartFromMark(newValue) {
+                        startChoiceOverride = nil
+                    }
+                }
+            }
+        )
+    }
+
+    private var startLineSection: some View {
+        Section {
+            Picker("Where is the start line?", selection: startLineChoiceBinding) {
+                Text("Charted mark").tag(StartLineChoice.charted)
+                Text("Ping on the water").tag(StartLineChoice.ping)
+            }
+            .pickerStyle(.segmented)
+            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+
+            if startLineChoice == .charted {
+                if chartedStartCandidates.isEmpty {
+                    Text("No marks in this list are charted with a fixed position.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Picker("Pin mark", selection: chartedStartMarkBinding) {
+                        Text("Choose a mark").tag(Optional<Mark>.none)
+                        ForEach(chartedStartCandidates) { mark in
+                            Text("\(mark.code) — \(mark.name)").tag(Optional(mark))
+                        }
+                    }
+                }
+            }
+        } header: {
+            Text("Start line")
+        } footer: {
+            Text(startLineChoice == .charted
+                ? "The pin end is a fixed mark, so its name doesn't need to go on the course the way a turning mark's does — the RC never posts it either. In Race Mode only the committee boat needs pinging."
+                : "The pin end will be pinged live from the boat in Race Mode, same as the committee boat.")
+        }
     }
 
     /// What the RC is flying, as cloth you tap rather than settings you hunt
