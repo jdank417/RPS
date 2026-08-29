@@ -36,6 +36,42 @@ final class RaceLiveActivityManager {
 
     var isActive: Bool { activity != nil }
 
+    /// Picks up an activity that outlived a previous app session - Live
+    /// Activities keep running (and keep sitting on the Lock Screen) even
+    /// after the app that started them is force-quit, but this manager's
+    /// `activity` reference is plain in-memory state that doesn't survive
+    /// that. Without this, a killed-and-relaunched app has no way to
+    /// update *or end* one it no longer remembers starting - which is
+    /// exactly how one gets stuck on the Lock Screen looking abandoned.
+    /// Call once, e.g. when the app appears.
+    func reconnect(isSequenceRunning: Bool) {
+        guard activity == nil else { return }
+        let existing = Array(Activity<RaceActivityAttributes>.activities)
+        guard let found = existing.first else { return }
+
+        if isSequenceRunning {
+            // Still genuinely racing - adopt it so future syncs update the
+            // same card instead of leaving it stale and starting a second
+            // one alongside it.
+            activity = found
+            lastPushedState = found.content.state
+            lastPushedAt = nil
+        } else {
+            // Nothing should still be running - this is exactly the
+            // "stuck" case, so clear it out immediately rather than
+            // waiting for the system's own multi-hour timeout.
+            print("RaceLiveActivityManager: ending orphaned activity \(found.id) from a previous session")
+            Task { await found.end(nil, dismissalPolicy: .immediate) }
+        }
+
+        // Belt and suspenders - there should only ever be one, but if a
+        // previous bug (or a crash mid-update) left more than one behind,
+        // clear the rest out too.
+        for extra in existing.dropFirst() {
+            Task { await extra.end(nil, dismissalPolicy: .immediate) }
+        }
+    }
+
     /// Call this whenever anything the activity shows might have changed -
     /// cheap even when nothing did, since it only pushes to the system
     /// when the content has genuinely changed (or the throttle has
@@ -78,19 +114,17 @@ final class RaceLiveActivityManager {
     }
 
     func end() {
-        guard let activity, let finalState = lastPushedState else { return }
+        guard let activity else { return }
         self.activity = nil
         lastPushedState = nil
         lastPushedAt = nil
         Task {
-            // .default rather than .immediate: the Activity ending is the
+            // nil content leaves whatever was last pushed showing; .default
+            // rather than .immediate because the Activity ending is the
             // race finishing, and a sailor who's just crossed the line
             // gets a moment to see the card confirm that before the system
             // clears it, rather than it vanishing mid-glance.
-            await activity.end(
-                ActivityContent(state: finalState, staleDate: nil),
-                dismissalPolicy: .default
-            )
+            await activity.end(nil, dismissalPolicy: .default)
         }
     }
 

@@ -18,6 +18,8 @@ enum AppTab: Int, Hashable {
 
 struct AppTabView: View {
     @Environment(LivePositionStore.self) private var liveStore
+    @Environment(StartSequenceViewModel.self) private var sequence
+    @Environment(RaceLiveActivityManager.self) private var liveActivity
     @AppStorage("rps.hasSeenDisclaimer") private var hasSeenDisclaimer = false
     @State private var showDisclaimer = false
     @State private var selectedTab: AppTab = .course
@@ -59,6 +61,10 @@ struct AppTabView: View {
             // Held back while the disclaimer is up so the system location
             // alert doesn't land on top of it.
             if hasSeenDisclaimer { liveStore.start(userInitiated: false) }
+            // Clears out (or re-adopts) any Live Activity left over from a
+            // previous session - see RaceLiveActivityManager.reconnect for
+            // why this can't just be left for the next sync() call.
+            liveActivity.reconnect(isSequenceRunning: sequence.running)
         }
         .sheet(isPresented: $showDisclaimer, onDismiss: {
             hasSeenDisclaimer = true
