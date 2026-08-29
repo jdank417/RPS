@@ -2,14 +2,17 @@
 //  RaceActivityAttributes.swift
 //  RPS / RPSLiveActivity
 //
-//  The Lock Screen / Dynamic Island contract for a race's Live Activity.
-//  This file has to compile into BOTH targets - the main RPS app (which
-//  starts and updates the Activity from live GPS/wind/course state) and
-//  this widget extension (which only renders it) - because ActivityKit
-//  identifies an Activity by this exact Swift type, not just a matching
-//  shape. It lives here, in the widget extension's folder, with the main
-//  RPS target added to it under Xcode's File Inspector -> Target
-//  Membership. That one checkbox is a manual step - nothing else needed.
+//  Everything the main RPS app and this widget extension need to agree on
+//  the exact same definition of, in one place:
+//   - the Lock Screen / Dynamic Island contract for a race's Live Activity
+//     (ActivityKit identifies an Activity by this exact Swift type, not
+//     just a matching shape)
+//   - the shared-storage contract for the RPSWindWidget Home Screen widget
+//  This file has to compile into BOTH targets, which is why it lives here
+//  with the main RPS target added under Xcode's File Inspector -> Target
+//  Membership. That one checkbox is a manual step - nothing else needed
+//  for this file specifically (the widget's App Group is a separate step,
+//  documented below on WidgetSharedStore).
 //
 
 import ActivityKit
@@ -40,4 +43,41 @@ struct RaceActivityAttributes: ActivityAttributes {
     /// one race, so it's an attribute rather than something re-sent with
     /// every content update.
     var clubName: String
+}
+
+// MARK: - Home Screen widget data
+
+/// The latest wind reading, as the RPSWindWidget Home Screen widget needs
+/// it. A plain WidgetKit widget (unlike a Live Activity) runs its
+/// TimelineProvider in the widget extension's own process on the system's
+/// own schedule - it can't be pushed to the way ActivityKit content is, so
+/// it has to read whatever the main app last wrote somewhere both
+/// processes can reach. That's an App Group container, not the app's own
+/// UserDefaults.standard (which the extension process can't see at all).
+struct WindWidgetSnapshot: Codable {
+    var fromDeg: Double
+    var speedKts: Double
+    var gustKts: Double?
+    var at: Date
+}
+
+enum WidgetSharedStore {
+    /// Must match the App Group both the RPS and RPSLiveActivity targets
+    /// are enrolled in (Signing & Capabilities -> + Capability -> App
+    /// Groups) - that enrollment is a manual Xcode step, same idea as the
+    /// Target Membership checkbox this file already needed.
+    static let appGroupID = "group.JasonDank.RPS"
+    private static let windKey = "rps.widget.wind"
+
+    static func saveWind(_ snapshot: WindWidgetSnapshot) {
+        guard let defaults = UserDefaults(suiteName: appGroupID) else { return }
+        guard let data = try? JSONEncoder().encode(snapshot) else { return }
+        defaults.set(data, forKey: windKey)
+    }
+
+    static func loadWind() -> WindWidgetSnapshot? {
+        guard let defaults = UserDefaults(suiteName: appGroupID),
+              let data = defaults.data(forKey: windKey) else { return nil }
+        return try? JSONDecoder().decode(WindWidgetSnapshot.self, from: data)
+    }
 }

@@ -21,6 +21,7 @@ import Foundation
 import Observation
 import CoreLocation
 import WeatherKit
+import WidgetKit
 
 @Observable
 @MainActor
@@ -146,6 +147,18 @@ final class WindService {
         lastFetchAt = reading.at
         lastLat = lat
         lastLon = lon
+
+        // Hands the reading to the RPSWindWidget Home Screen widget, which
+        // can't fetch its own (it has no GPS fix of its own to fetch
+        // against, and re-doing this whole fallback chain in the widget
+        // extension's process would just be this file twice).
+        WidgetSharedStore.saveWind(WindWidgetSnapshot(
+            fromDeg: reading.fromDeg,
+            speedKts: reading.speedKts,
+            gustKts: reading.gustKts,
+            at: reading.at
+        ))
+        WidgetCenter.shared.reloadTimelines(ofKind: "RPSWindWidget")
     }
 }
 

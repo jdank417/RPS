@@ -12,5 +12,6 @@ import SwiftUI
 struct RPSLiveActivityBundle: WidgetBundle {
     var body: some Widget {
         RPSLiveActivityLiveActivity()
+        RPSWindWidget()
     }
 }
