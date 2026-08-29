@@ -362,6 +362,12 @@ struct WeatherView: View {
         }
     }
 
+    /// A fixed height regardless of content, and the caption row is always
+    /// present (just invisible when there is none) rather than omitted -
+    /// otherwise a tile with a two-line caption (pressure trend) sits
+    /// taller than one with none (visibility), and since a `LazyVGrid` only
+    /// matches height *within* a row, not across rows, the two rows of
+    /// tiles ended up visibly different sizes.
     private func statTile(title: String, value: String, caption: String?, captionSymbol: String?) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
@@ -373,19 +379,18 @@ struct WeatherView: View {
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            if let caption {
+            Group {
                 if let captionSymbol {
-                    Label(caption, systemImage: captionSymbol)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Label(caption ?? " ", systemImage: captionSymbol)
                 } else {
-                    Text(caption)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text(caption ?? " ")
                 }
             }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .opacity(caption == nil ? 0 : 1)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
         .padding()
         .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
     }

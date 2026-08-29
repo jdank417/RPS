@@ -159,7 +159,7 @@ struct CourseMapView: View {
             }
             .disabled(windFromDeg == nil)
 
-            mapButton(systemImage: "water.fill", isOn: showCurrent, label: "Show current") {
+            mapButton(systemImage: "drop.fill", isOn: showCurrent, label: "Show current") {
                 showCurrent.toggle()
             }
             .disabled(current == nil)
