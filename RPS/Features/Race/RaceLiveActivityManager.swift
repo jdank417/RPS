@@ -119,12 +119,13 @@ final class RaceLiveActivityManager {
         lastPushedState = nil
         lastPushedAt = nil
         Task {
-            // nil content leaves whatever was last pushed showing; .default
-            // rather than .immediate because the Activity ending is the
-            // race finishing, and a sailor who's just crossed the line
-            // gets a moment to see the card confirm that before the system
-            // clears it, rather than it vanishing mid-glance.
-            await activity.end(nil, dismissalPolicy: .default)
+            // .immediate: this fires when the sailor taps "Cancel
+            // Sequence" (or, from reconnect(), on an orphaned activity
+            // from a previous session) - an explicit "get this off my
+            // Lock Screen now", not a race finishing on its own. .default
+            // would leave it lingering for up to four hours, which is
+            // exactly the "stuck" complaint this is meant to fix.
+            await activity.end(nil, dismissalPolicy: .immediate)
         }
     }
 
