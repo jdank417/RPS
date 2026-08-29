@@ -84,11 +84,10 @@ struct SailPlanTests {
         #expect(plan.tack == .port)
     }
 
-    @Test("Every angle produces a non-empty sail call")
+    @Test("Every angle produces a non-empty point of sail")
     func alwaysSaysSomething() {
         for heading in stride(from: 0.0, to: 360.0, by: 15) {
             let plan = SailPlan(legHeadingDeg: heading, windFromDeg: 225)
-            #expect(!plan.sails.isEmpty)
             #expect(!plan.pointOfSail.isEmpty)
         }
     }

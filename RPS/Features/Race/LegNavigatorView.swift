@@ -196,7 +196,7 @@ private struct LegPage: View {
             : String(format: "h:mm at %.1f kt", speedKts)
     }
 
-    /// The sail call, and where the breeze is coming from.
+    /// Point of sail, and where the breeze is coming from.
     ///
     /// Uses the leg's *true* heading, not whichever one is displayed above:
     /// the forecast reports wind in degrees true, and mixing the two would
@@ -213,11 +213,6 @@ private struct LegPage: View {
             VStack(spacing: 4) {
                 Text(plan.pointOfSail)
                     .font(.headline)
-                Text(plan.sails)
-                    .font(.subheadline)
-                    .foregroundStyle(plan.isBeat ? Color.orange : Color.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
                 Text(
                     "Wind from \(Int(wind.fromDeg.rounded()))°T at \(Int(wind.speedKts.rounded())) kt"
                     + (windIsStale ? " · stale" : "")

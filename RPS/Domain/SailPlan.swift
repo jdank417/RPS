@@ -3,8 +3,7 @@
 //  RPS
 //
 //  What a leg's wind angle means for the boat: which tack, what point of
-//  sail, and - the question actually being asked on the way out to the
-//  start - which sails to have ready.
+//  sail, and how the true wind angle relates to it.
 //
 
 import Foundation
@@ -26,8 +25,6 @@ struct SailPlan: Equatable {
     let isBeat: Bool
     /// Whether a downwind sail is worth setting for this leg.
     let spinnaker: Bool
-    /// Plain-language sail call.
-    let sails: String
 
     /// Below this the mark is inside the no-go zone: the leg is a beat and
     /// the rhumb line is not sailable. 40 degrees is a workable middle for
@@ -48,17 +45,5 @@ struct SailPlan: Equatable {
         pointOfSail = SailingMath.pointOfSail(twaDeg: twa)
         isBeat = magnitude < Self.beatThresholdDeg
         spinnaker = magnitude >= Self.spinnakerThresholdDeg
-
-        if magnitude < Self.beatThresholdDeg {
-            sails = "Main + jib — beat, expect to tack"
-        } else if magnitude < 60 {
-            sails = "Main + jib, close hauled"
-        } else if magnitude < Self.spinnakerThresholdDeg {
-            sails = "Main + jib, eased"
-        } else if magnitude < 150 {
-            sails = "Kite — broad reach"
-        } else {
-            sails = "Kite — running, watch for a gybe"
-        }
     }
 }

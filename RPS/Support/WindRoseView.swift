@@ -100,26 +100,6 @@ struct WindRoseView: View {
                 BoatHull().stroke(Color(uiColor: .systemBackground), lineWidth: 1.5)
             )
             .frame(width: size * 0.20, height: size * 0.46)
-            // Sails set on the side away from the wind: on port tack the
-            // breeze is over the port side, so the boom is out to starboard.
-            .overlay(alignment: .center) {
-                Rectangle()
-                    .fill(Color.primary.opacity(0.55))
-                    .frame(width: 1.8, height: size * 0.26)
-                    .offset(y: size * 0.03)
-                    .rotationEffect(
-                        .degrees(boomAngle),
-                        anchor: .top
-                    )
-            }
-    }
-
-    /// How far the boom is eased, and to which side. Sheeted in hard on the
-    /// wind, squared off downwind, always opposite the breeze.
-    private var boomAngle: Double {
-        let magnitude = min(abs(plan.twaDeg), 170)
-        let ease = (magnitude / 180) * 80
-        return plan.tack == .port ? ease : -ease
     }
 }
 
