@@ -2,8 +2,9 @@
 //  AppTabView.swift
 //  RPS
 //
-//  The signed-in app: Course Builder, Race Mode, and Profile. Shows the
-//  on-the-water disclaimer once per install before the sailor can dig in.
+//  The signed-in app: Course Builder, Race Mode, Weather, and Profile. Shows
+//  the on-the-water disclaimer once per install before the sailor can dig
+//  in.
 //
 
 import SwiftUI
@@ -11,7 +12,8 @@ import SwiftUI
 enum AppTab: Int, Hashable {
     case course = 0
     case race = 1
-    case profile = 2
+    case weather = 2
+    case profile = 3
 }
 
 struct AppTabView: View {
@@ -35,6 +37,10 @@ struct AppTabView: View {
             RaceModeView(selectedSegment: $raceSegment)
                 .tabItem { Label("Race", systemImage: "flag.checkered.2.crossed") }
                 .tag(AppTab.race)
+
+            WeatherView()
+                .tabItem { Label("Weather", systemImage: "cloud.sun.fill") }
+                .tag(AppTab.weather)
 
             ProfileView()
                 .tabItem { Label("Profile", systemImage: "person.crop.circle") }
