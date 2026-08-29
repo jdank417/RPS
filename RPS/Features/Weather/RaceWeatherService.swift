@@ -135,7 +135,7 @@ final class RaceWeatherService {
             let location = CLLocation(latitude: lat, longitude: lon)
             let (current, hourly) = try await weatherKit.weather(for: location, including: .current, .hourly)
 
-            let hourlyPoints: [HourlyWindPoint] = hourly.prefix(9).map { hour in
+            let hourlyPoints: [HourlyWindPoint] = hourly.prefix(24).map { hour in
                 HourlyWindPoint(
                     date: hour.date,
                     symbolName: hour.symbolName,
