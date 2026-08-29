@@ -67,12 +67,20 @@
 			);
 			target = F270BD82304380E700D5F786 /* RPSLiveActivityExtension */;
 		};
+		F270BDA4304385AE00D5F786 /* Exceptions for "RPSLiveActivity" folder in "RPS" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				RaceActivityAttributes.swift,
+			);
+			target = F2F6B5BC303DA5A600B445B3 /* RPS */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		F270BD89304380E700D5F786 /* RPSLiveActivity */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
+				F270BDA4304385AE00D5F786 /* Exceptions for "RPSLiveActivity" folder in "RPS" target */,
 				F270BD9A304380E800D5F786 /* Exceptions for "RPSLiveActivity" folder in "RPSLiveActivityExtension" target */,
 			);
 			path = RPSLiveActivity;
@@ -578,7 +586,6 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RPS uses your location to plot your course, ping the start line, and track your position while racing.";
-				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -613,7 +620,6 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RPS uses your location to plot your course, ping the start line, and track your position while racing.";
-				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
