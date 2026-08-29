@@ -109,7 +109,10 @@ final class RaceLiveActivityManager {
     }
 
     private func start(clubName: String, state: RaceActivityAttributes.ContentState) {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            print("RaceLiveActivityManager: not starting - Live Activities are disabled (Settings > RPS > Live Activities, or Settings > Face ID & Passcode > Live Activities).")
+            return
+        }
         do {
             let attributes = RaceActivityAttributes(clubName: clubName)
             let content = ActivityContent(state: state, staleDate: nil)
@@ -117,11 +120,14 @@ final class RaceLiveActivityManager {
             self.activity = activity
             lastPushedState = state
             lastPushedAt = Date()
+            print("RaceLiveActivityManager: started activity \(activity.id)")
         } catch {
             // A Live Activity is a bonus on the lock screen, not something
             // racing depends on - permission denied, the simulator, or the
             // per-app activity limit shouldn't interrupt anything else the
-            // app is doing.
+            // app is doing. Logged (not surfaced to the sailor) so a
+            // failure here is at least visible in the Xcode console.
+            print("RaceLiveActivityManager: failed to start activity - \(error)")
         }
     }
 
