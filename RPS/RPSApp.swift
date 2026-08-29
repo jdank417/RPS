@@ -20,6 +20,7 @@ struct RPSApp: App {
     @State private var courseStore: CourseStateStore
     @State private var liveStore: LivePositionStore
     @State private var windService: WindService
+    @State private var tidalCurrentService: TidalCurrentService
     @State private var sequenceViewModel: StartSequenceViewModel
     @State private var raceViewModel: RaceViewModel
 
@@ -34,6 +35,7 @@ struct RPSApp: App {
         _courseStore = State(initialValue: courseStore)
         _liveStore = State(initialValue: liveStore)
         _windService = State(initialValue: windService)
+        _tidalCurrentService = State(initialValue: TidalCurrentService())
         _sequenceViewModel = State(initialValue: StartSequenceViewModel())
         _raceViewModel = State(initialValue: RaceViewModel(courseStore: courseStore, liveStore: liveStore, windService: windService))
     }
@@ -46,6 +48,7 @@ struct RPSApp: App {
                 .environment(courseStore)
                 .environment(liveStore)
                 .environment(windService)
+                .environment(tidalCurrentService)
                 .environment(sequenceViewModel)
                 .environment(raceViewModel)
         }

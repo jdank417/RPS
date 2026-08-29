@@ -78,10 +78,91 @@ struct RaceWeatherSnapshot: Equatable {
     var humidity: Double
     var visibility: Measurement<UnitLength>
     var uvIndex: Int
+    /// 0...1.
+    var cloudCover: Double
+    var dewPoint: Measurement<UnitTemperature>
     /// The next several hours, for the trend - not a full multi-day
     /// forecast, which isn't what a race committee or a crew needs from
     /// this screen.
     var hourly: [HourlyWindPoint]
+}
+
+/// One of the stat tiles on the Weather tab. There are more metrics here
+/// than tiles, so which four show is a per-sailor choice rather than fixed.
+enum WeatherMetric: String, CaseIterable, Identifiable, Codable {
+    case pressure, visibility, humidity, uvIndex, temperature, windSpeed, gust, cloudCover, dewPoint
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .pressure: return "PRESSURE"
+        case .visibility: return "VISIBILITY"
+        case .humidity: return "HUMIDITY"
+        case .uvIndex: return "UV INDEX"
+        case .temperature: return "TEMPERATURE"
+        case .windSpeed: return "WIND SPEED"
+        case .gust: return "GUST"
+        case .cloudCover: return "CLOUD COVER"
+        case .dewPoint: return "DEW POINT"
+        }
+    }
+
+    /// Sentence-case, for the customization picker - `title` is uppercase
+    /// tile-header styling, not a label to show as-is in a Picker row.
+    var displayName: String {
+        switch self {
+        case .pressure: return "Pressure"
+        case .visibility: return "Visibility"
+        case .humidity: return "Humidity"
+        case .uvIndex: return "UV Index"
+        case .temperature: return "Temperature"
+        case .windSpeed: return "Wind Speed"
+        case .gust: return "Gust"
+        case .cloudCover: return "Cloud Cover"
+        case .dewPoint: return "Dew Point"
+        }
+    }
+
+    /// Value, and an optional caption (with an optional leading symbol) -
+    /// what `statTile` in `WeatherView` needs to render this metric.
+    func reading(from snapshot: RaceWeatherSnapshot) -> (value: String, caption: String?, symbol: String?) {
+        switch self {
+        case .pressure:
+            return (
+                String(format: "%.0f hPa", snapshot.pressure.converted(to: .hectopascals).value),
+                snapshot.pressureTrend.label,
+                snapshot.pressureTrend.symbolName
+            )
+        case .visibility:
+            return (snapshot.visibility.formatted(), nil, nil)
+        case .humidity:
+            return ("\(Int((snapshot.humidity * 100).rounded()))%", nil, nil)
+        case .uvIndex:
+            return ("\(snapshot.uvIndex)", Self.uvCaption(snapshot.uvIndex), nil)
+        case .temperature:
+            return (snapshot.temperature.formatted(), nil, nil)
+        case .windSpeed:
+            return (String(format: "%.0f kt", snapshot.windSpeed.value), nil, nil)
+        case .gust:
+            guard let gust = snapshot.gust else { return ("–", "No gust data", nil) }
+            return (String(format: "%.0f kt", gust.value), nil, nil)
+        case .cloudCover:
+            return ("\(Int((snapshot.cloudCover * 100).rounded()))%", nil, nil)
+        case .dewPoint:
+            return (snapshot.dewPoint.formatted(), nil, nil)
+        }
+    }
+
+    private static func uvCaption(_ index: Int) -> String {
+        switch index {
+        case 0...2: return "Low"
+        case 3...5: return "Moderate"
+        case 6...7: return "High"
+        case 8...10: return "Very high"
+        default: return "Extreme"
+        }
+    }
 }
 
 @Observable
@@ -157,6 +238,8 @@ final class RaceWeatherService {
                 humidity: current.humidity,
                 visibility: current.visibility,
                 uvIndex: current.uvIndex.value,
+                cloudCover: current.cloudCover,
+                dewPoint: current.dewPoint,
                 hourly: hourlyPoints
             )
             error = nil

@@ -37,6 +37,7 @@ struct RaceModeView: View {
 
     @Environment(RaceViewModel.self) private var race
     @Environment(LivePositionStore.self) private var liveStore
+    @Environment(TidalCurrentService.self) private var tidalService
     @Binding var selectedSegment: Segment
 
     var body: some View {
@@ -90,7 +91,12 @@ struct RaceModeView: View {
         // Not userInitiated: if the sailor deliberately stopped GPS, coming
         // back to this tab must not silently restart it.
         .onAppear { liveStore.start(userInitiated: false) }
-        .onChange(of: liveStore.fix) { _, _ in race.refreshWindIfNeeded() }
+        .onChange(of: liveStore.fix) { _, fix in
+            race.refreshWindIfNeeded()
+            if let fix {
+                Task { await tidalService.refresh(lat: fix.lat, lon: fix.lon) }
+            }
+        }
     }
 
     /// Height the leg toolbar occupies, handed to the map so it insets its
@@ -106,6 +112,7 @@ struct RaceModeView: View {
             committee: race.committee,
             highlightedLegIndex: race.courseStore.currentLegIndex,
             windFromDeg: race.windService.wind?.fromDeg,
+            current: tidalService.snapshot?.current,
             bottomContentInset: computation.legs.isEmpty ? 0 : legToolbarHeight
         )
         // safeAreaInset rather than a ZStack overlay: this keeps the toolbar
@@ -466,5 +473,6 @@ private extension Array {
         .environment(RaceViewModel(courseStore: courseStore, liveStore: liveStore, windService: wind))
         .environment(liveStore)
         .environment(courseStore)
+        .environment(TidalCurrentService())
         .environment(StartSequenceViewModel())
 }

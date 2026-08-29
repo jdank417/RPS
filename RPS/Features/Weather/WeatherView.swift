@@ -2,11 +2,13 @@
 //  WeatherView.swift
 //  RPS
 //
-//  What WeatherKit adds beyond the plain forecast wind used mid-race:
-//  current conditions, pressure and its trend, visibility, UV - and, the
-//  reason this tab exists, a wind map plus an hourly trend so a crew can see
-//  whether the breeze is building, dying, or shifting over the next few
-//  hours rather than only knowing what it's doing right now.
+//  What WeatherKit (and, for water current, NOAA) adds beyond the plain
+//  forecast wind used mid-race: current conditions, pressure and its trend,
+//  visibility, UV - and, the reason this tab exists, a map (with the
+//  plotted course and a wind/current picture over it) plus hourly trends so
+//  a crew can see whether the breeze and the water are building, dying, or
+//  shifting over the next few hours rather than only knowing what they're
+//  doing right now.
 //
 
 import SwiftUI
@@ -15,20 +17,34 @@ import MapKit
 struct WeatherView: View {
     @Environment(LivePositionStore.self) private var liveStore
     @Environment(CourseStateStore.self) private var course
+    @Environment(TidalCurrentService.self) private var tidalService
     @State private var service = RaceWeatherService()
+    @State private var showCustomizeSheet = false
 
-    /// How many of the fetched hours to actually show - the one bit of
-    /// customization this tab offers. Persisted, so the choice sticks
-    /// between races rather than resetting every launch.
+    /// How many of the fetched hours to actually show. Persisted, so the
+    /// choice sticks between races rather than resetting every launch.
     @AppStorage("rps.weather.hourWindow") private var hourWindow = 6
     @AppStorage("rps.weather.showMap") private var showMap = true
+
+    /// Which metric fills each of the four stat tiles - the other bit of
+    /// customization this tab offers, stored by `WeatherMetric.rawValue`
+    /// rather than the enum itself so `@AppStorage` doesn't need it to be
+    /// a primitive type.
+    @AppStorage("rps.weather.panel0") private var panel0Raw = WeatherMetric.pressure.rawValue
+    @AppStorage("rps.weather.panel1") private var panel1Raw = WeatherMetric.visibility.rawValue
+    @AppStorage("rps.weather.panel2") private var panel2Raw = WeatherMetric.humidity.rawValue
+    @AppStorage("rps.weather.panel3") private var panel3Raw = WeatherMetric.uvIndex.rawValue
+
+    private var panels: [WeatherMetric] {
+        [panel0Raw, panel1Raw, panel2Raw, panel3Raw].map { WeatherMetric(rawValue: $0) ?? .pressure }
+    }
 
     /// The boat's live GPS fix when there is one; otherwise the first
     /// resolved position in the built course, so this tab is useful before
     /// GPS has a fix (indoors, at the dock) as long as a course exists.
     private var location: (lat: Double, lon: Double)? {
         if let fix = liveStore.fix { return (fix.lat, fix.lon) }
-        if let point = course.legComputation.mapPoints.compactMap({ $0 }).first {
+        if let point = placedCoursePoints.first {
             return (point.lat, point.lon)
         }
         return nil
@@ -37,6 +53,10 @@ struct WeatherView: View {
     private var coordinate: CLLocationCoordinate2D? {
         guard let location else { return nil }
         return CLLocationCoordinate2D(latitude: location.lat, longitude: location.lon)
+    }
+
+    private var placedCoursePoints: [MapPoint] {
+        course.legComputation.mapPoints.compactMap { $0 }
     }
 
     private var locationSourceText: String {
@@ -55,6 +75,14 @@ struct WeatherView: View {
                         statsGrid(snapshot)
                         if !snapshot.hourly.isEmpty {
                             hourlyTrend(snapshot.hourly)
+                        }
+                        if let tidal = tidalService.snapshot {
+                            currentTrendCard(tidal)
+                        } else if let tidalError = tidalService.error {
+                            Text(tidalError)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
                         }
                     } else if service.isLoading {
                         ProgressView("Fetching weather…")
@@ -94,11 +122,16 @@ struct WeatherView: View {
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Menu {
-                        Toggle("Show wind map", isOn: $showMap)
+                        Toggle("Show map", isOn: $showMap)
                         Picker("Forecast window", selection: $hourWindow) {
                             Text("6 hours").tag(6)
                             Text("12 hours").tag(12)
                             Text("24 hours").tag(24)
+                        }
+                        Button {
+                            showCustomizeSheet = true
+                        } label: {
+                            Label("Customize panels", systemImage: "square.grid.2x2")
                         }
                     } label: {
                         Image(systemName: "slider.horizontal.3")
@@ -111,6 +144,7 @@ struct WeatherView: View {
                     .disabled(service.isLoading || location == nil)
                 }
             }
+            .sheet(isPresented: $showCustomizeSheet) { customizeSheet }
             .task { await load(force: false) }
             .onChange(of: liveStore.fix) { _, _ in Task { await load(force: false) } }
         }
@@ -118,20 +152,56 @@ struct WeatherView: View {
 
     private func load(force: Bool) async {
         guard let location else { return }
-        await service.refresh(lat: location.lat, lon: location.lon, force: force)
+        async let weatherLoad: () = service.refresh(lat: location.lat, lon: location.lon, force: force)
+        async let tidalLoad: () = tidalService.refresh(lat: location.lat, lon: location.lon, force: force)
+        _ = await (weatherLoad, tidalLoad)
+    }
+
+    // MARK: - Panel customization
+
+    private var customizeSheet: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Picker("Panel 1", selection: $panel0Raw) { metricPickerOptions }
+                    Picker("Panel 2", selection: $panel1Raw) { metricPickerOptions }
+                    Picker("Panel 3", selection: $panel2Raw) { metricPickerOptions }
+                    Picker("Panel 4", selection: $panel3Raw) { metricPickerOptions }
+                } footer: {
+                    Text("Choose which four readings show on the Weather tab.")
+                }
+            }
+            .navigationTitle("Customize Panels")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { showCustomizeSheet = false }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    @ViewBuilder
+    private var metricPickerOptions: some View {
+        ForEach(WeatherMetric.allCases) { metric in
+            Text(metric.displayName).tag(metric.rawValue)
+        }
     }
 
     // MARK: - Wind map
 
-    /// A third of the page, per the brief: the local chart with the same
-    /// drifting wind-streak field used on the course map, so the current
-    /// breeze reads as a picture rather than a number. WeatherKit only
-    /// gives a single point sample, not a spatial grid, so this is
-    /// deliberately not claiming to show a wind field across the area -
-    /// just this one reading, in the place it applies, which is what a crew
-    /// actually has to work with here.
+    /// A third of the page, per the brief: the plotted course and the
+    /// boat's position, with the same drifting wind-streak field used on
+    /// the race map, plus the nearest tidal current reading in the corner.
+    /// WeatherKit and NOAA both give a single point sample, not a spatial
+    /// grid, so this is deliberately not claiming to show a wind or current
+    /// field across the area - just the one reading each, pictured where
+    /// they apply, which is what a crew actually has to work with here.
     private func windMap(coordinate: CLLocationCoordinate2D, snapshot: RaceWeatherSnapshot) -> some View {
-        Map(initialPosition: .camera(MapCamera(centerCoordinate: coordinate, distance: 4000, heading: 0))) {
+        Map(initialPosition: .camera(MapCamera(centerCoordinate: coordinate, distance: mapCameraDistance, heading: 0))) {
+            courseLineContent
+            courseMarkAnnotations
             if liveStore.fix != nil {
                 Annotation("You", coordinate: coordinate) {
                     Image(systemName: "location.north.fill")
@@ -160,12 +230,65 @@ struct WeatherView: View {
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
             .padding(10)
         }
+        .overlay(alignment: .bottomTrailing) {
+            if let current = tidalService.snapshot?.current {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.up")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.cyan)
+                        .rotationEffect(.degrees(current.towardDeg))
+                    Text(String(format: "%.1f kt", current.speedKts))
+                        .font(.caption.weight(.semibold))
+                }
+                .padding(8)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                .padding(10)
+            }
+        }
         .frame(height: 220)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         // Forces the map to re-center when the boat has moved meaningfully,
         // since `initialPosition` (deliberately, to allow free panning
         // without fighting a bound camera) otherwise only applies once.
         .id(String(format: "%.3f,%.3f", coordinate.latitude, coordinate.longitude))
+    }
+
+    /// Wide enough that the farthest plotted mark is comfortably in frame,
+    /// floored so a single mark (or none) doesn't zoom in absurdly close
+    /// and capped so a sprawling course doesn't zoom this "local" picture
+    /// out past being useful.
+    private var mapCameraDistance: Double {
+        guard let coordinate else { return 4000 }
+        let maxDistNm = placedCoursePoints.map {
+            GeoMath.haversineNm(lat1: coordinate.latitude, lon1: coordinate.longitude, lat2: $0.lat, lon2: $0.lon)
+        }.max() ?? 0
+        let meters = maxDistNm * 1852 * 2.6
+        return min(max(meters, 1200), 20000)
+    }
+
+    @MapContentBuilder
+    private var courseLineContent: some MapContent {
+        if placedCoursePoints.count >= 2 {
+            MapPolyline(coordinates: placedCoursePoints.map(\.coordinate))
+                .stroke(Color.accentColor.opacity(0.55), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+        }
+    }
+
+    @MapContentBuilder
+    private var courseMarkAnnotations: some MapContent {
+        ForEach(placedCoursePoints) { point in
+            Annotation(point.name, coordinate: point.coordinate) {
+                MarkBadge(
+                    code: point.label,
+                    govtLight: point.govtLight,
+                    portable: point.portable,
+                    rounding: point.rounding,
+                    isStart: point.isStart,
+                    size: 26
+                )
+            }
+            .annotationTitles(.hidden)
+        }
     }
 
     // MARK: - Current conditions
@@ -232,25 +355,10 @@ struct WeatherView: View {
 
     private func statsGrid(_ snapshot: RaceWeatherSnapshot) -> some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-            statTile(
-                title: "PRESSURE",
-                value: String(format: "%.0f hPa", snapshot.pressure.converted(to: .hectopascals).value),
-                caption: snapshot.pressureTrend.label,
-                captionSymbol: snapshot.pressureTrend.symbolName
-            )
-            statTile(title: "VISIBILITY", value: snapshot.visibility.formatted(), caption: nil, captionSymbol: nil)
-            statTile(title: "HUMIDITY", value: "\(Int((snapshot.humidity * 100).rounded()))%", caption: nil, captionSymbol: nil)
-            statTile(title: "UV INDEX", value: "\(snapshot.uvIndex)", caption: uvCaption(snapshot.uvIndex), captionSymbol: nil)
-        }
-    }
-
-    private func uvCaption(_ index: Int) -> String {
-        switch index {
-        case 0...2: return "Low"
-        case 3...5: return "Moderate"
-        case 6...7: return "High"
-        case 8...10: return "Very high"
-        default: return "Extreme"
+            ForEach(Array(panels.enumerated()), id: \.offset) { _, metric in
+                let reading = metric.reading(from: snapshot)
+                statTile(title: metric.title, value: reading.value, caption: reading.caption, captionSymbol: reading.symbol)
+            }
         }
     }
 
@@ -282,13 +390,13 @@ struct WeatherView: View {
         .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
     }
 
-    // MARK: - Hourly trend
+    // MARK: - Hourly wind trend
 
     /// The reason this tab exists: is the breeze building, dying, or
     /// shifting over the chosen window - not just what it's doing now.
     private func hourlyTrend(_ allHours: [HourlyWindPoint]) -> some View {
         let hours = Array(allHours.prefix(hourWindow))
-        let trend = trendLabels(hours)
+        let trend = windTrendLabels(hours)
 
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -313,7 +421,7 @@ struct WeatherView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
                     ForEach(hours) { hour in
-                        VStack(spacing: 6) {
+                        VStack(spacing: 4) {
                             Text(hour.date.formatted(.dateTime.hour()))
                                 .font(.caption.weight(.semibold))
                             Image(systemName: hour.symbolName)
@@ -322,6 +430,9 @@ struct WeatherView: View {
                             Image(systemName: "arrow.up")
                                 .font(.caption)
                                 .rotationEffect(.degrees(hour.windFromDeg + 180))
+                            Text("\(Int(hour.windFromDeg.rounded()))°")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                             Text(String(format: "%.0f", hour.windSpeed.value))
                                 .font(.subheadline.weight(.bold))
                                 .monospacedDigit()
@@ -334,7 +445,7 @@ struct WeatherView: View {
                                     .foregroundStyle(.blue)
                             }
                         }
-                        .frame(width: 52)
+                        .frame(width: 56)
                     }
                 }
                 .padding(.vertical, 4)
@@ -347,7 +458,7 @@ struct WeatherView: View {
 
     /// Net direction shift and speed change across the shown window - the
     /// two things that actually change a race plan mid-course.
-    private func trendLabels(_ hours: [HourlyWindPoint]) -> (direction: (text: String, symbol: String), speed: (text: String, symbol: String))? {
+    private func windTrendLabels(_ hours: [HourlyWindPoint]) -> (direction: (text: String, symbol: String), speed: (text: String, symbol: String))? {
         guard hours.count >= 2, let first = hours.first, let last = hours.last else { return nil }
         let shift = GeoMath.signedAngleDiff(target: last.windFromDeg, from: first.windFromDeg)
         let speedDelta = last.windSpeed.value - first.windSpeed.value
@@ -368,10 +479,85 @@ struct WeatherView: View {
         if deltaKt < -1.5 { return ("Easing \(Int(abs(deltaKt).rounded())) kt", "arrow.down") }
         return ("Speed steady", "arrow.left.and.right")
     }
+
+    // MARK: - Tidal current trend
+
+    /// The other thing that changes a race plan and wind alone doesn't
+    /// cover: which way the water itself is moving. Same shape as the wind
+    /// trend card on purpose - two things a crew checks the same way,
+    /// pictured the same way.
+    private func currentTrendCard(_ snapshot: TidalCurrentSnapshot) -> some View {
+        let points = Array(snapshot.points.prefix(hourWindow))
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("CURRENT")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .tracking(1)
+                Spacer()
+                Text(String(format: "%@ · %.0f nm", snapshot.stationName, snapshot.stationDistanceNm))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            if let now = snapshot.current {
+                HStack(spacing: 6) {
+                    // No +180 here, unlike the wind arrows: NOAA gives
+                    // current direction as where the water is flowing
+                    // *toward*, so the arrow can point straight there.
+                    Image(systemName: "arrow.up")
+                        .foregroundStyle(.cyan)
+                        .rotationEffect(.degrees(now.towardDeg))
+                    Text(String(format: "%.1f kt", now.speedKts))
+                        .font(.title3.weight(.bold))
+                        .monospacedDigit()
+                    Text("toward \(SailingMath.compassPoint(now.towardDeg)) · \(Int(now.towardDeg.rounded()))°T")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+
+            if !points.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 14) {
+                        ForEach(points) { point in
+                            VStack(spacing: 4) {
+                                Text(point.date.formatted(.dateTime.hour()))
+                                    .font(.caption.weight(.semibold))
+                                Image(systemName: "arrow.up")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.cyan)
+                                    .rotationEffect(.degrees(point.towardDeg))
+                                Text("\(Int(point.towardDeg.rounded()))°")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                Text(String(format: "%.1f", point.speedKts))
+                                    .font(.subheadline.weight(.bold))
+                                    .monospacedDigit()
+                                Text("kt")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(width: 56)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+    }
 }
 
 #Preview {
     WeatherView()
         .environment(LivePositionStore())
         .environment(CourseStateStore())
+        .environment(TidalCurrentService())
 }

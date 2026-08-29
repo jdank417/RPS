@@ -21,6 +21,10 @@ struct CourseMapView: View {
     /// no forecast yet, which hides the wind overlay entirely rather than
     /// drawing lines pointing nowhere.
     var windFromDeg: Double? = nil
+    /// The nearest tidal current station's current reading, when there is
+    /// one close enough to be useful. Nil hides the current toggle
+    /// entirely, same reasoning as `windFromDeg`.
+    var current: TidalCurrentPoint? = nil
     /// Extra bottom inset so overlaid chrome (the leg toolbar in Race Mode)
     /// never sits on top of the course itself.
     var bottomContentInset: CGFloat = 0
@@ -39,6 +43,7 @@ struct CourseMapView: View {
     @State private var followBoat = false
     @State private var hybrid = false
     @State private var showWind = false
+    @State private var showCurrent = false
 
     private var placedPoints: [MapPoint] { mapPoints.compactMap { $0 } }
 
@@ -110,6 +115,11 @@ struct CourseMapView: View {
                 )
             }
         }
+        .overlay(alignment: .bottomLeading) {
+            if showCurrent, let current {
+                currentBadge(current)
+            }
+        }
         .overlay(alignment: .topTrailing) { mapButtons }
         .onAppear { fitIfCourseChanged() }
         .onChange(of: courseSignature) { _, _ in fitIfCourseChanged() }
@@ -148,9 +158,33 @@ struct CourseMapView: View {
                 showWind.toggle()
             }
             .disabled(windFromDeg == nil)
+
+            mapButton(systemImage: "water.fill", isOn: showCurrent, label: "Show current") {
+                showCurrent.toggle()
+            }
+            .disabled(current == nil)
         }
         .padding(.top, 8)
         .padding(.trailing, 12)
+    }
+
+    /// A single arrow rather than a drifting field like the wind overlay:
+    /// current is one point sample same as wind, but its speed is usually
+    /// a fraction of the breeze, so a whole particle system would either be
+    /// too faint to read or misleadingly busy for what it's showing.
+    private func currentBadge(_ current: TidalCurrentPoint) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "arrow.up")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.cyan)
+                .rotationEffect(.degrees(current.towardDeg - cameraHeading))
+            Text(String(format: "Current %.1f kt", current.speedKts))
+                .font(.caption.weight(.semibold))
+        }
+        .padding(8)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .padding(.leading, 12)
+        .padding(.bottom, 8)
     }
 
     private func mapButton(systemImage: String, isOn: Bool, label: String, action: @escaping () -> Void) -> some View {
