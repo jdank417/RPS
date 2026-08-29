@@ -54,6 +54,7 @@
 		F270BD83304380E700D5F786 /* RPSLiveActivityExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RPSLiveActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		F270BD85304380E700D5F786 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		F270BD87304380E700D5F786 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		F270BE3F304393E300D5F786 /* RPSLiveActivityExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RPSLiveActivityExtension.entitlements; sourceTree = "<group>"; };
 		F2F6B5BD303DA5A600B445B3 /* RPS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RPS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2F6B5CA303DA5AA00B445B3 /* RPSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RPSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2F6B5D4303DA5AA00B445B3 /* RPSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RPSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -149,6 +150,7 @@
 		F2F6B5B4303DA5A600B445B3 = {
 			isa = PBXGroup;
 			children = (
+				F270BE3F304393E300D5F786 /* RPSLiveActivityExtension.entitlements */,
 				F2F6B5BF303DA5A600B445B3 /* RPS */,
 				F2F6B5CD303DA5AA00B445B3 /* RPSTests */,
 				F2F6B5D7303DA5AA00B445B3 /* RPSUITests */,
@@ -398,6 +400,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = RPSLiveActivityExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 2QQCT8Q4CK;
@@ -428,6 +431,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = RPSLiveActivityExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 2QQCT8Q4CK;
