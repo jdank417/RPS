@@ -6,7 +6,20 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		F270BD86304380E700D5F786 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F270BD85304380E700D5F786 /* WidgetKit.framework */; };
+		F270BD88304380E700D5F786 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F270BD87304380E700D5F786 /* SwiftUI.framework */; };
+		F270BD99304380E800D5F786 /* RPSLiveActivityExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F270BD83304380E700D5F786 /* RPSLiveActivityExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
+		F270BD97304380E800D5F786 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F2F6B5B5303DA5A600B445B3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F270BD82304380E700D5F786;
+			remoteInfo = RPSLiveActivityExtension;
+		};
 		F2F6B5CB303DA5AA00B445B3 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F2F6B5B5303DA5A600B445B3 /* Project object */;
@@ -23,13 +36,48 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		F270BD9E304380E800D5F786 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				F270BD99304380E800D5F786 /* RPSLiveActivityExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		F270BD83304380E700D5F786 /* RPSLiveActivityExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RPSLiveActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		F270BD85304380E700D5F786 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		F270BD87304380E700D5F786 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		F2F6B5BD303DA5A600B445B3 /* RPS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RPS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2F6B5CA303DA5AA00B445B3 /* RPSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RPSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2F6B5D4303DA5AA00B445B3 /* RPSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RPSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		F270BD9A304380E800D5F786 /* Exceptions for "RPSLiveActivity" folder in "RPSLiveActivityExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = F270BD82304380E700D5F786 /* RPSLiveActivityExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		F270BD89304380E700D5F786 /* RPSLiveActivity */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				F270BD9A304380E800D5F786 /* Exceptions for "RPSLiveActivity" folder in "RPSLiveActivityExtension" target */,
+			);
+			path = RPSLiveActivity;
+			sourceTree = "<group>";
+		};
 		F2F6B5BF303DA5A600B445B3 /* RPS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = RPS;
@@ -48,6 +96,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		F270BD80304380E700D5F786 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F270BD88304380E700D5F786 /* SwiftUI.framework in Frameworks */,
+				F270BD86304380E700D5F786 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F2F6B5BA303DA5A600B445B3 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -72,12 +129,23 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		F270BD84304380E700D5F786 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				F270BD85304380E700D5F786 /* WidgetKit.framework */,
+				F270BD87304380E700D5F786 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		F2F6B5B4303DA5A600B445B3 = {
 			isa = PBXGroup;
 			children = (
 				F2F6B5BF303DA5A600B445B3 /* RPS */,
 				F2F6B5CD303DA5AA00B445B3 /* RPSTests */,
 				F2F6B5D7303DA5AA00B445B3 /* RPSUITests */,
+				F270BD89304380E700D5F786 /* RPSLiveActivity */,
+				F270BD84304380E700D5F786 /* Frameworks */,
 				F2F6B5BE303DA5A600B445B3 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,6 +156,7 @@
 				F2F6B5BD303DA5A600B445B3 /* RPS.app */,
 				F2F6B5CA303DA5AA00B445B3 /* RPSTests.xctest */,
 				F2F6B5D4303DA5AA00B445B3 /* RPSUITests.xctest */,
+				F270BD83304380E700D5F786 /* RPSLiveActivityExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -95,6 +164,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		F270BD82304380E700D5F786 /* RPSLiveActivityExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F270BD9B304380E800D5F786 /* Build configuration list for PBXNativeTarget "RPSLiveActivityExtension" */;
+			buildPhases = (
+				F270BD7F304380E700D5F786 /* Sources */,
+				F270BD80304380E700D5F786 /* Frameworks */,
+				F270BD81304380E700D5F786 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				F270BD89304380E700D5F786 /* RPSLiveActivity */,
+			);
+			name = RPSLiveActivityExtension;
+			packageProductDependencies = (
+			);
+			productName = RPSLiveActivityExtension;
+			productReference = F270BD83304380E700D5F786 /* RPSLiveActivityExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		F2F6B5BC303DA5A600B445B3 /* RPS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = F2F6B5DE303DA5AA00B445B3 /* Build configuration list for PBXNativeTarget "RPS" */;
@@ -102,10 +193,12 @@
 				F2F6B5B9303DA5A600B445B3 /* Sources */,
 				F2F6B5BA303DA5A600B445B3 /* Frameworks */,
 				F2F6B5BB303DA5A600B445B3 /* Resources */,
+				F270BD9E304380E800D5F786 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				F270BD98304380E800D5F786 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				F2F6B5BF303DA5A600B445B3 /* RPS */,
@@ -173,6 +266,9 @@
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
+					F270BD82304380E700D5F786 = {
+						CreatedOnToolsVersion = 26.2;
+					};
 					F2F6B5BC303DA5A600B445B3 = {
 						CreatedOnToolsVersion = 26.2;
 					};
@@ -203,11 +299,19 @@
 				F2F6B5BC303DA5A600B445B3 /* RPS */,
 				F2F6B5C9303DA5AA00B445B3 /* RPSTests */,
 				F2F6B5D3303DA5AA00B445B3 /* RPSUITests */,
+				F270BD82304380E700D5F786 /* RPSLiveActivityExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		F270BD81304380E700D5F786 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F2F6B5BB303DA5A600B445B3 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -232,6 +336,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		F270BD7F304380E700D5F786 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F2F6B5B9303DA5A600B445B3 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -256,6 +367,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		F270BD98304380E800D5F786 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F270BD82304380E700D5F786 /* RPSLiveActivityExtension */;
+			targetProxy = F270BD97304380E800D5F786 /* PBXContainerItemProxy */;
+		};
 		F2F6B5CC303DA5AA00B445B3 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = F2F6B5BC303DA5A600B445B3 /* RPS */;
@@ -269,6 +385,66 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		F270BD9C304380E800D5F786 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2QQCT8Q4CK;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RPSLiveActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = RPSLiveActivity;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = JasonDank.RPS.RPSLiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		F270BD9D304380E800D5F786 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2QQCT8Q4CK;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RPSLiveActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = RPSLiveActivity;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = JasonDank.RPS.RPSLiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		F2F6B5DC303DA5AA00B445B3 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -545,6 +721,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		F270BD9B304380E800D5F786 /* Build configuration list for PBXNativeTarget "RPSLiveActivityExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F270BD9C304380E800D5F786 /* Debug */,
+				F270BD9D304380E800D5F786 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		F2F6B5B8303DA5A600B445B3 /* Build configuration list for PBXProject "RPS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
