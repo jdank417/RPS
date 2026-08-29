@@ -7,7 +7,8 @@
 //   - the Lock Screen / Dynamic Island contract for a race's Live Activity
 //     (ActivityKit identifies an Activity by this exact Swift type, not
 //     just a matching shape)
-//   - the shared-storage contract for the RPSWindWidget Home Screen widget
+//   - the shared-storage contract for the RPSWindWidget and RPSRaceWidget
+//     Home Screen widgets
 //  This file has to compile into BOTH targets, which is why it lives here
 //  with the main RPS target added under Xcode's File Inspector -> Target
 //  Membership. That one checkbox is a manual step - nothing else needed
@@ -79,5 +80,26 @@ enum WidgetSharedStore {
         guard let defaults = UserDefaults(suiteName: appGroupID),
               let data = defaults.data(forKey: windKey) else { return nil }
         return try? JSONDecoder().decode(WindWidgetSnapshot.self, from: data)
+    }
+
+    private static let raceKey = "rps.widget.race"
+
+    /// RPSRaceWidget's other half: whatever the Live Activity's content
+    /// state currently is, or nil once the sequence stops - which is also
+    /// what tells the widget to switch back to its "Start Race" layout.
+    static func saveRace(_ state: RaceActivityAttributes.ContentState?) {
+        guard let defaults = UserDefaults(suiteName: appGroupID) else { return }
+        guard let state else {
+            defaults.removeObject(forKey: raceKey)
+            return
+        }
+        guard let data = try? JSONEncoder().encode(state) else { return }
+        defaults.set(data, forKey: raceKey)
+    }
+
+    static func loadRace() -> RaceActivityAttributes.ContentState? {
+        guard let defaults = UserDefaults(suiteName: appGroupID),
+              let data = defaults.data(forKey: raceKey) else { return nil }
+        return try? JSONDecoder().decode(RaceActivityAttributes.ContentState.self, from: data)
     }
 }

@@ -17,6 +17,7 @@ enum AppTab: Int, Hashable {
 }
 
 struct AppTabView: View {
+    @Environment(AppState.self) private var appState
     @Environment(LivePositionStore.self) private var liveStore
     @Environment(StartSequenceViewModel.self) private var sequence
     @Environment(RaceLiveActivityManager.self) private var liveActivity
@@ -65,6 +66,13 @@ struct AppTabView: View {
             // previous session - see RaceLiveActivityManager.reconnect for
             // why this can't just be left for the next sync() call.
             liveActivity.reconnect(isSequenceRunning: sequence.running)
+            // Covers a cold launch via the widget: .onOpenURL can fire
+            // before AppTabView exists at all (the app starts on the
+            // launch screen, not this view), so the link is already
+            // sitting there by the time this .task runs - .onChange below
+            // only catches one that arrives while this view is already on
+            // screen, so both paths are needed.
+            applyPendingDeepLink()
         }
         .sheet(isPresented: $showDisclaimer, onDismiss: {
             hasSeenDisclaimer = true
@@ -72,5 +80,20 @@ struct AppTabView: View {
         }) {
             DisclaimerView()
         }
+        .onChange(of: appState.pendingDeepLink) { _, _ in applyPendingDeepLink() }
+    }
+
+    private func applyPendingDeepLink() {
+        guard let link = appState.pendingDeepLink else { return }
+        selectedTab = .race
+        switch link {
+        case .countdown: raceSegment = .countdown
+        case .leg: raceSegment = .leg
+        }
+        // Consumed - clearing it means re-tapping the same widget target
+        // re-fires this (a fresh URL open always re-sets it to a non-nil
+        // value first), while nothing else in the app can trigger it
+        // again by accident.
+        appState.pendingDeepLink = nil
     }
 }

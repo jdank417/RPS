@@ -18,6 +18,7 @@
 import Foundation
 import Observation
 import ActivityKit
+import WidgetKit
 
 @Observable
 @MainActor
@@ -33,6 +34,14 @@ final class RaceLiveActivityManager {
     /// glancing at the lock screen; the numbers under it just need to be
     /// roughly current, not per-second.
     private static let minPushInterval: TimeInterval = 20
+
+    /// Tracked separately from the Live Activity's own push state: whether
+    /// a Live Activity could be started at all (permission denied, the
+    /// simulator, whatever) has nothing to do with whether RPSRaceWidget
+    /// should still be able to mirror the race, so this can't just piggy-
+    /// back on `lastPushedState`/`lastPushedAt` above.
+    private var lastWidgetState: RaceActivityAttributes.ContentState?
+    private var lastWidgetPushAt: Date?
 
     var isActive: Bool { activity != nil }
 
@@ -56,12 +65,16 @@ final class RaceLiveActivityManager {
             activity = found
             lastPushedState = found.content.state
             lastPushedAt = nil
+            // Also gets RPSRaceWidget showing the right thing immediately
+            // at launch, rather than only after the Race tab is opened.
+            syncWidget(found.content.state)
         } else {
             // Nothing should still be running - this is exactly the
             // "stuck" case, so clear it out immediately rather than
             // waiting for the system's own multi-hour timeout.
             print("RaceLiveActivityManager: ending orphaned activity \(found.id) from a previous session")
             Task { await found.end(nil, dismissalPolicy: .immediate) }
+            syncWidget(nil)
         }
 
         // Belt and suspenders - there should only ever be one, but if a
@@ -90,6 +103,7 @@ final class RaceLiveActivityManager {
     ) {
         guard running else {
             end()
+            syncWidget(nil)
             return
         }
 
@@ -103,6 +117,11 @@ final class RaceLiveActivityManager {
             windFromDeg: windFromDeg,
             windSpeedKts: windSpeedKts
         )
+
+        // Independent of whether the Live Activity itself starts/updates
+        // below - RPSRaceWidget doesn't need Live Activities to be enabled
+        // to do its own job.
+        syncWidget(state)
 
         guard let activity else {
             start(clubName: clubName, state: state)
@@ -126,6 +145,37 @@ final class RaceLiveActivityManager {
             // would leave it lingering for up to four hours, which is
             // exactly the "stuck" complaint this is meant to fix.
             await activity.end(nil, dismissalPolicy: .immediate)
+        }
+    }
+
+    // MARK: - Widget
+
+    /// Same throttle idea as `shouldPush`, kept as its own state so a
+    /// disabled/denied Live Activity never blocks RPSRaceWidget from
+    /// updating.
+    private func syncWidget(_ state: RaceActivityAttributes.ContentState?) {
+        guard shouldPushWidget(state) else { return }
+        lastWidgetState = state
+        lastWidgetPushAt = Date()
+        WidgetSharedStore.saveRace(state)
+        WidgetCenter.shared.reloadTimelines(ofKind: "RPSRaceWidget")
+    }
+
+    private func shouldPushWidget(_ state: RaceActivityAttributes.ContentState?) -> Bool {
+        switch (lastWidgetState, state) {
+        case (nil, nil):
+            return false
+        case (nil, .some), (.some, nil):
+            return true
+        case let (.some(last), .some(new)):
+            if new.flag != last.flag { return true }
+            if new.isRacing != last.isRacing { return true }
+            if new.legLabel != last.legLabel { return true }
+            if new.startAt != last.startAt { return true }
+            if let lastWidgetPushAt, Date().timeIntervalSince(lastWidgetPushAt) < Self.minPushInterval {
+                return false
+            }
+            return true
         }
     }
 

@@ -22,6 +22,16 @@ enum SessionPhase: Equatable {
     case ready
 }
 
+/// Where a tap on a Home Screen widget should land - set from
+/// `RPSApp`'s `.onOpenURL`, consumed (and cleared) by `AppTabView`, which
+/// owns the tab/segment selection this needs to reach.
+enum RPSDeepLink: Equatable {
+    /// The "Start Race" tap on RPSRaceWidget, when no race is running.
+    case countdown
+    /// A tap on RPSRaceWidget while it's mirroring an in-progress leg.
+    case leg
+}
+
 @Observable
 @MainActor
 final class AppState {
@@ -38,6 +48,11 @@ final class AppState {
     /// rather than looking hung.
     private(set) var isWakingServer = false
 
+    /// Set once by `.onOpenURL`, read once by `AppTabView` (which clears
+    /// it back to nil after acting on it, so re-showing the same tab
+    /// doesn't re-fire the navigation on every subsequent view update).
+    var pendingDeepLink: RPSDeepLink?
+
     private let api: APIClient
     private let keychain: KeychainStore
     private let cache: APICache
@@ -49,6 +64,19 @@ final class AppState {
     }
 
     var currentUser: User? { bootstrap?.user }
+
+    // MARK: - Deep links
+
+    /// `rps://countdown` or `rps://leg`, from RPSRaceWidget's tap targets -
+    /// registered as this app's custom URL scheme under the RPS target's
+    /// Info tab in Xcode (Info -> URL Types), not Signing & Capabilities.
+    func handle(url: URL) {
+        switch url.host {
+        case "countdown": pendingDeepLink = .countdown
+        case "leg": pendingDeepLink = .leg
+        default: break
+        }
+    }
 
     // MARK: - Launch
 

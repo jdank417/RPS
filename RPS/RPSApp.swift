@@ -54,6 +54,10 @@ struct RPSApp: App {
                 .environment(sequenceViewModel)
                 .environment(raceViewModel)
                 .environment(liveActivityManager)
+                // RPSRaceWidget's tap targets - rps://countdown, rps://leg.
+                // Requires the "rps" URL scheme registered under the RPS
+                // target's Info -> URL Types in Xcode.
+                .onOpenURL { url in appState.handle(url: url) }
         }
     }
 }
