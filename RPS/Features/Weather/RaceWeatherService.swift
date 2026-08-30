@@ -141,7 +141,7 @@ enum WeatherMetric: String, CaseIterable, Identifiable, Codable {
         case .uvIndex:
             return ("\(snapshot.uvIndex)", Self.uvCaption(snapshot.uvIndex), nil)
         case .temperature:
-            return (snapshot.temperature.formatted(), nil, nil)
+            return (snapshot.temperature.formatted(.measurement(width: .abbreviated, numberFormatStyle: .number.precision(.fractionLength(0)))), nil, nil)
         case .windSpeed:
             return (String(format: "%.0f kt", snapshot.windSpeed.value), nil, nil)
         case .gust:
@@ -150,7 +150,7 @@ enum WeatherMetric: String, CaseIterable, Identifiable, Codable {
         case .cloudCover:
             return ("\(Int((snapshot.cloudCover * 100).rounded()))%", nil, nil)
         case .dewPoint:
-            return (snapshot.dewPoint.formatted(), nil, nil)
+            return (snapshot.dewPoint.formatted(.measurement(width: .abbreviated, numberFormatStyle: .number.precision(.fractionLength(0)))), nil, nil)
         }
     }
 

@@ -309,7 +309,7 @@ struct WeatherView: View {
                 Image(systemName: snapshot.symbolName)
                     .font(.system(size: 36))
                     .symbolRenderingMode(.multicolor)
-                Text(snapshot.temperature.formatted())
+                Text(snapshot.temperature.formatted(.measurement(width: .abbreviated, numberFormatStyle: .number.precision(.fractionLength(0)))))
                     .font(.system(size: 40, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .lineLimit(1)
