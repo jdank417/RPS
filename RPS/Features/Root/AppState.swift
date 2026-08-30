@@ -122,6 +122,23 @@ final class AppState {
         await loadBootstrap()
     }
 
+    /// Permanently deletes this account, then tears the session down.
+    ///
+    /// Required by App Store Review guideline 5.1.1(v). Note this does NOT
+    /// call `api.logout()` the way `signOut` does: the account is gone
+    /// server-side, so redeeming its refresh token would 401 against a user
+    /// that no longer exists. The local teardown is the same otherwise -
+    /// leaving this account's cached clubs and mark lists behind would show
+    /// them to whoever signs in on this phone next.
+    func deleteAccount(password: String) async throws {
+        try await api.deleteMe(password: password)
+        cache.clearAll()
+        keychain.clear()
+        bootstrap = nil
+        errorMessage = nil
+        phase = .signedOut
+    }
+
     func signOut() async {
         await api.logout()
         // Everything cached is this account's data - clubs, mark lists, the

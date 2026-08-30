@@ -63,6 +63,13 @@ struct ChangePasswordRequest: Encodable {
     }
 }
 
+/// Deleting an account re-asks for the password on purpose: a valid access
+/// token lives in this phone's Keychain for weeks, and this is the one
+/// action in the API that can't be undone.
+struct AccountDeleteRequest: Encodable {
+    var password: String
+}
+
 /// FastAPI's default error body shape.
 struct APIErrorBody: Decodable {
     var detail: String?

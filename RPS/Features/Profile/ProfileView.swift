@@ -21,6 +21,7 @@ struct ProfileView: View {
     @State private var showServerSettings = false
     @State private var showInfo = false
     @State private var showSignOutConfirm = false
+    @State private var showDeleteAccount = false
     @State private var errorMessage: String?
 
     var body: some View {
@@ -93,12 +94,32 @@ struct ProfileView: View {
                         Text("Sign Out").frame(maxWidth: .infinity)
                     }
                 }
+
+                // Its own section, below Sign Out and behind a password, so
+                // it can't be reached by a thumb aiming for something else.
+                // App Store Review guideline 5.1.1(v) requires this to exist
+                // in the app, not just as an email to support.
+                Section {
+                    Button(role: .destructive) {
+                        showDeleteAccount = true
+                    } label: {
+                        Text("Delete Account").frame(maxWidth: .infinity)
+                    }
+                } footer: {
+                    Text(
+                        "Permanently deletes your account and your club-admin access. "
+                        + "Marks and mark lists belong to the club and stay. This can't be undone."
+                    )
+                }
             }
             .navigationTitle("Profile")
             .onAppear { fullName = appState.currentUser?.fullName ?? "" }
             .confirmationDialog("Sign out?", isPresented: $showSignOutConfirm, titleVisibility: .visible) {
                 Button("Sign Out", role: .destructive) { Task { await appState.signOut() } }
                 Button("Cancel", role: .cancel) {}
+            }
+            .sheet(isPresented: $showDeleteAccount) {
+                DeleteAccountView()
             }
             .sheet(isPresented: $showClubPicker) {
                 ClubPickerView()
@@ -185,6 +206,92 @@ private struct ChangePasswordView: View {
             try await appState.changePassword(current: current, new: new)
             didSucceed = true
             current = ""; new = ""; confirm = ""
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+/// Account deletion, per App Store Review guideline 5.1.1(v).
+///
+/// Two things stand between a tap and a deleted account: the password, and
+/// a confirmation dialog. That is deliberate for an action with no undo -
+/// there is no "deleted accounts" list to restore from, and re-registering
+/// the same email produces a genuinely new, empty account.
+private struct DeleteAccountView: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var password = ""
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+    @State private var showConfirm = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("Deleting your account removes your sign-in, your club-admin access, "
+                         + "and your upload history.")
+                    Text("Marks and mark lists belong to the club, not to you, so they stay "
+                         + "where they are.")
+                    Text("This can't be undone.")
+                        .fontWeight(.semibold)
+                }
+
+                Section("Confirm your password") {
+                    SecureField("Password", text: $password)
+                        .textContentType(.password)
+                }
+
+                if let errorMessage {
+                    Section {
+                        Text(errorMessage).font(.footnote).foregroundStyle(.red)
+                    }
+                }
+
+                Section {
+                    Button(role: .destructive) {
+                        showConfirm = true
+                    } label: {
+                        if isLoading {
+                            ProgressView().frame(maxWidth: .infinity)
+                        } else {
+                            Text("Delete My Account").frame(maxWidth: .infinity)
+                        }
+                    }
+                    .disabled(password.isEmpty || isLoading)
+                }
+            }
+            .navigationTitle("Delete Account")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.disabled(isLoading)
+                }
+            }
+            .confirmationDialog(
+                "Permanently delete your account?",
+                isPresented: $showConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Account", role: .destructive) { Task { await deleteAccount() } }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This can't be undone.")
+            }
+        }
+    }
+
+    private func deleteAccount() async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+        do {
+            try await appState.deleteAccount(password: password)
+            // No dismiss() needed: AppState.phase is now .signedOut, so
+            // RootView swaps the whole tab bar out from under this sheet for
+            // the sign-in screen.
         } catch {
             errorMessage = error.localizedDescription
         }

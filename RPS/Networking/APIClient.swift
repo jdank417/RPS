@@ -121,6 +121,18 @@ final class APIClient {
         try await authorizedRequest("/api/v1/users/me", method: "PATCH", body: update)
     }
 
+    /// Permanently deletes the signed-in account.
+    ///
+    /// Required by App Store Review guideline 5.1.1(v): an app that lets you
+    /// create an account has to let you delete it from inside the app.
+    /// Password-confirmed server-side; the backend refuses with a 409 if
+    /// this is the last remaining superuser.
+    func deleteMe(password: String) async throws {
+        try await authorizedNoContent(
+            "/api/v1/users/me", method: "DELETE", body: AccountDeleteRequest(password: password)
+        )
+    }
+
     // MARK: - Bootstrap / clubs / mark lists / marks
 
     /// Always goes to the network. Bootstrap carries live account state and
