@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<!--
+	 App Privacy "nutrition label" data-collection disclosures go here
+	 (NSPrivacyCollectedDataTypes) - left empty rather than guessed, since it
+	 must match whatever is declared in App Store Connect's App Privacy
+	 questionnaire exactly. Fill in per that questionnaire before submitting.
+	 -->
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<!-- Read/write this app's own settings and caches (AppSettings,
+				 WindService/TidalCurrentService forecast caches, CourseStateStore's
+				 saved course) - never shared outside the app. -->
+				<string>AC6B.1</string>
+				<!-- Read/write race state in the group.JasonDank.RPS App Group
+				 container, shared with the RPSLiveActivity widget extension so the
+				 Lock Screen/Home Screen widgets can show it. -->
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
