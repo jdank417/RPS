@@ -31,7 +31,7 @@ struct ProfileView: View {
                     LabeledContent("Email", value: appState.currentUser?.email ?? "—")
 
                     HStack {
-                        TextField("Full name", text: $fullName)
+                        TextField("Full name", text: $fullName.capped(at: InputLimit.name))
                             .textContentType(.name)
                             .onSubmit { Task { await saveName() } }
                         if isSavingName {
@@ -167,9 +167,9 @@ private struct ChangePasswordView: View {
         NavigationStack {
             Form {
                 Section {
-                    SecureField("Current password", text: $current)
-                    SecureField("New password", text: $new)
-                    SecureField("Confirm new password", text: $confirm)
+                    SecureField("Current password", text: $current.capped(at: InputLimit.password))
+                    SecureField("New password", text: $new.capped(at: InputLimit.password))
+                    SecureField("Confirm new password", text: $confirm.capped(at: InputLimit.password))
                 }
                 if !confirm.isEmpty && confirm != new {
                     Text("Passwords don't match yet.").font(.footnote).foregroundStyle(.orange)
@@ -240,7 +240,7 @@ private struct DeleteAccountView: View {
                 }
 
                 Section("Confirm your password") {
-                    SecureField("Password", text: $password)
+                    SecureField("Password", text: $password.capped(at: InputLimit.password))
                         .textContentType(.password)
                 }
 

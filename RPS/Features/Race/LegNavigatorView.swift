@@ -14,9 +14,26 @@ struct LegNavigatorView: View {
     @Environment(CourseStateStore.self) private var course
     @Environment(WindService.self) private var windService
     @Environment(LivePositionStore.self) private var liveStore
+    @Environment(RaceViewModel.self) private var race
     @Environment(AppSettings.self) private var settings
 
     private var legs: [LegInfo] { course.legComputation.legs }
+
+    /// The boat's actual GPS course over ground right now, as opposed to
+    /// `leg.trueHdg`/`magHdg` below it - the bearing the course was *planned*
+    /// on, back in the course builder. Nil while stationary: a heading with
+    /// no way over the ground behind it is noise, not news.
+    private var liveHeadingDeg: Double? {
+        guard let hdg = liveStore.fix?.headingDeg, liveStore.moving else { return nil }
+        return settings.useMagnetic
+            ? GeoMath.applyVariation(trueHeadingDeg: hdg, variationDeg: course.variationDeg)
+            : hdg
+    }
+
+    /// How far the mark is off the bow *right now*, signed - negative to
+    /// port. `race.vector` already tracks whichever leg is current, which
+    /// this view keeps in lockstep with the page being swiped to below.
+    private var offCourseDeg: Double? { race.vector?.offCourseDeg }
 
     var body: some View {
         Group {
@@ -38,7 +55,9 @@ struct LegNavigatorView: View {
                             speedKts: liveStore.fix?.speedKts,
                             useMagnetic: settings.useMagnetic,
                             wind: windService.wind,
-                            windIsStale: windService.stale
+                            windIsStale: windService.stale,
+                            liveHeadingDeg: liveHeadingDeg,
+                            offCourseDeg: offCourseDeg
                         )
                         .tag(leg.legIndex)
                     }
@@ -63,6 +82,10 @@ private struct LegPage: View {
     let useMagnetic: Bool
     let wind: WindReading?
     let windIsStale: Bool
+    /// The boat's live GPS course over ground, when moving - nil at rest.
+    let liveHeadingDeg: Double?
+    /// Signed degrees the mark sits off that live heading, negative to port.
+    let offCourseDeg: Double?
 
     var body: some View {
         // Deliberately no ScrollView: everything about this page is meant to
@@ -94,6 +117,8 @@ private struct LegPage: View {
                 }
 
                 Spacer(minLength: 0)
+
+                liveHeadingCallout
 
                 statsRow
                 windCallout
@@ -196,6 +221,51 @@ private struct LegPage: View {
             : String(format: "h:mm at %.1f kt", speedKts)
     }
 
+    /// Where the boat is actually pointed right now, and which way to
+    /// correct to lay the mark - the live counterpart to the planned
+    /// heading in `headingBlock` above, so a glance answers "am I still on
+    /// track" without switching to Instruments.
+    private var liveHeadingCallout: some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 6) {
+                Text("LIVE HEADING")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .tracking(1.5)
+                if liveHeadingDeg != nil {
+                    Image(systemName: "location.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+                }
+            }
+            if let liveHeadingDeg {
+                Text(GeoMath.fmtHeading(liveHeadingDeg))
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                if let offCourseDeg {
+                    Text(
+                        abs(offCourseDeg) < 1
+                            ? "Right on the mark"
+                            : (offCourseDeg < 0
+                                ? "Mark is \(Int(-offCourseDeg.rounded()))° to port"
+                                : "Mark is \(Int(offCourseDeg.rounded()))° to starboard")
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+            } else {
+                Text("Waiting for GPS course")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+        .accessibilityElement(children: .combine)
+    }
+
     /// Point of sail, and where the breeze is coming from.
     ///
     /// Uses the leg's *true* heading, not whichever one is displayed above:
@@ -287,9 +357,13 @@ private struct LegPage: View {
 }
 
 #Preview {
+    let courseStore = CourseStateStore()
+    let windService = WindService()
+    let liveStore = LivePositionStore()
     LegNavigatorView()
-        .environment(CourseStateStore())
-        .environment(WindService())
-        .environment(LivePositionStore())
+        .environment(courseStore)
+        .environment(windService)
+        .environment(liveStore)
+        .environment(RaceViewModel(courseStore: courseStore, liveStore: liveStore, windService: windService))
         .environment(AppSettings.shared)
 }

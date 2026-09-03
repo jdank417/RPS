@@ -18,19 +18,19 @@ struct RegisterView: View {
     var body: some View {
         VStack(spacing: 16) {
             VStack(spacing: 12) {
-                TextField("Full name (optional)", text: $fullName)
+                TextField("Full name (optional)", text: $fullName.capped(at: InputLimit.name))
                     .textContentType(.name)
 
-                TextField("Email", text: $email)
+                TextField("Email", text: $email.capped(at: InputLimit.email))
                     .textContentType(.username)
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
 
-                SecureField("Password", text: $password)
+                SecureField("Password", text: $password.capped(at: InputLimit.password))
                     .textContentType(.newPassword)
 
-                SecureField("Confirm password", text: $confirmPassword)
+                SecureField("Confirm password", text: $confirmPassword.capped(at: InputLimit.password))
                     .textContentType(.newPassword)
             }
             .textFieldStyle(.roundedBorder)
