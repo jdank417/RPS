@@ -6,7 +6,9 @@
 import Foundation
 
 enum APIError: Error, LocalizedError, Equatable {
-    /// The API base URL hasn't been set (or isn't valid) in Settings yet.
+    /// The API base URL failed to parse into a request URL. The base itself
+    /// is a fixed, known-good constant (see AppSettings), so this can only
+    /// mean a malformed request path — a bug, not something a sailor can fix.
     case notConfigured
     case transport(String)
     case decoding(String)
@@ -20,7 +22,7 @@ enum APIError: Error, LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .notConfigured:
-            return "Set the server address in Settings before signing in."
+            return "Something went wrong reaching the server."
         case .transport(let message):
             return message
         case .decoding:

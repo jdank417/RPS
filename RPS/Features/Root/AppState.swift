@@ -235,6 +235,14 @@ final class AppState {
         try await api.changePassword(current: current, new: new)
     }
 
+    func requestClubAdmin(clubSlug: String, message: String?) async throws -> ClubAdminRequest {
+        try await api.requestClubAdmin(clubSlug: clubSlug, message: message)
+    }
+
+    func myClubAdminRequests() async throws -> [ClubAdminRequest] {
+        try await api.myClubAdminRequests()
+    }
+
     /// Replaces the loaded mark lists' selection with a specific list,
     /// fetching its marks. Used when the sailor picks a different mark list
     /// than the backend's default.

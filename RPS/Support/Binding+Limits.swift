@@ -29,4 +29,7 @@ enum InputLimit {
     static let email = 320
     /// bcrypt only ever looks at a password's first 72 bytes.
     static let password = 72
+    /// The backend's own `message` column is unbounded text; this is just a
+    /// sane cap on a free-text field with no natural length of its own.
+    static let message = 500
 }

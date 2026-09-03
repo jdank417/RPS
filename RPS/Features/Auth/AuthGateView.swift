@@ -2,8 +2,8 @@
 //  AuthGateView.swift
 //  RPS
 //
-//  The signed-out root: brand header, login/register switcher, and access to
-//  server settings. Shown whenever `AppState.phase == .signedOut`.
+//  The signed-out root: brand header and login/register switcher. Shown
+//  whenever `AppState.phase == .signedOut`.
 //
 
 import SwiftUI
@@ -14,20 +14,13 @@ struct AuthGateView: View {
         case register = "Create Account"
     }
 
-    @Environment(AppState.self) private var appState
-    @Environment(AppSettings.self) private var settings
     @State private var mode: Mode = .login
-    @State private var showServerSettings = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     header
-
-                    if !settings.isConfigured {
-                        serverWarning
-                    }
 
                     Picker("Mode", selection: $mode) {
                         ForEach(Mode.allCases, id: \.self) { m in
@@ -49,19 +42,6 @@ struct AuthGateView: View {
                 .padding(.bottom, 24)
             }
             .scrollDismissesKeyboard(.interactively)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showServerSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                    }
-                    .accessibilityLabel("Server settings")
-                }
-            }
-            .sheet(isPresented: $showServerSettings) {
-                ServerSettingsView()
-            }
         }
     }
 
@@ -76,14 +56,6 @@ struct AuthGateView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
-    }
-
-    private var serverWarning: some View {
-        Label("Set the server address in Settings before signing in.", systemImage: "exclamationmark.triangle.fill")
-            .font(.footnote)
-            .foregroundStyle(.orange)
-            .multilineTextAlignment(.center)
-            .padding(.horizontal)
     }
 }
 

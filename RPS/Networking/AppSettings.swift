@@ -2,9 +2,8 @@
 //  AppSettings.swift
 //  RPS
 //
-//  User-editable, locally-persisted app settings — chiefly the API base URL,
-//  since the backend's real deployed address isn't known at build time. Kept
-//  separate from Keychain: this is configuration, not a secret.
+//  User-editable, locally-persisted app settings. Kept separate from
+//  Keychain: this is configuration, not a secret.
 //
 
 import Foundation
@@ -16,17 +15,17 @@ final class AppSettings {
     static let shared = AppSettings()
 
     private enum Keys {
-        static let apiBaseURL = "rps.settings.apiBaseURL"
         static let variationDeg = "rps.settings.variationDeg"
         static let useMagnetic = "rps.settings.useMagnetic"
     }
 
     private let defaults: UserDefaults
 
-    /// The API's base URL, hardcoded to the production backend.
-    var apiBaseURLString: String {
-        didSet { defaults.set(apiBaseURLString, forKey: Keys.apiBaseURL) }
-    }
+    /// The RPS backend's address. Fixed, not user-editable: every club runs
+    /// on the same shared platform, so there's nothing to point this at
+    /// instead — the one time this *was* an editable setting, a mistyped
+    /// URL was a support dead end with no screen left to fix it from.
+    let apiBaseURLString = "https://rps-admin-backend.onrender.com"
 
     /// Magnetic variation in degrees, applied to true headings throughout the
     /// app. Positive is east, negative is west, matching the reference app's
@@ -47,21 +46,10 @@ final class AppSettings {
         didSet { defaults.set(useMagnetic, forKey: Keys.useMagnetic) }
     }
 
-    var isConfigured: Bool {
-        apiBaseURL != nil
-    }
-
-    var apiBaseURL: URL? {
-        let trimmed = apiBaseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let url = URL(string: trimmed), url.scheme != nil, url.host != nil else {
-            return nil
-        }
-        return url
-    }
+    var apiBaseURL: URL? { URL(string: apiBaseURLString) }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        self.apiBaseURLString = defaults.string(forKey: Keys.apiBaseURL) ?? "https://rps-admin-backend.onrender.com"
         self.variationDeg = defaults.object(forKey: Keys.variationDeg) as? Double ?? -14.6
         self.useMagnetic = defaults.object(forKey: Keys.useMagnetic) as? Bool ?? false
     }

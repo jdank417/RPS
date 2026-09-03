@@ -217,6 +217,22 @@ final class APIClient {
         try await authorizedRequest("/api/v1/mark-lists/\(id.uuidString)", method: "GET", body: Optional<NoBody>.none)
     }
 
+    // MARK: - Club admin requests
+
+    /// Ask to be made an admin of a club that's already on the platform.
+    /// Reviewed by that club's existing admins or a superuser, from the web
+    /// console — there's nothing more to do here once this is sent.
+    func requestClubAdmin(clubSlug: String, message: String?) async throws -> ClubAdminRequest {
+        try await authorizedRequest(
+            "/api/v1/clubs/\(formEncode(clubSlug))/admin-requests", method: "POST",
+            body: ClubAdminRequestCreate(message: message)
+        )
+    }
+
+    func myClubAdminRequests() async throws -> [ClubAdminRequest] {
+        try await authorizedRequest("/api/v1/club-admin-requests/mine", method: "GET", body: Optional<NoBody>.none)
+    }
+
     func marks(markListId: UUID, forceRefresh: Bool = false) async throws -> [Mark] {
         do {
             return try await referenceData(
