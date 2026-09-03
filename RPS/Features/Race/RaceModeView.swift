@@ -233,7 +233,14 @@ private struct InstrumentsView: View {
                     bigReadout("COG", value: liveStore.fix?.headingDeg.map { GeoMath.fmtHeading($0) } ?? "—", unit: "true")
                 }
                 HStack(spacing: 16) {
-                    bigReadout("VMG", value: race.vmgToMark.map { String(format: "%.1f", $0) } ?? "—", unit: "kts to mark")
+                    // VMC ("velocity made good on course"), not VMG - the
+                    // chartplotter term for closing speed on a waypoint,
+                    // deliberately not "VMG" here. VMG proper is speed made
+                    // good against the *wind* axis, which stays positive on
+                    // any efficient tack; this is closing speed on the
+                    // actual next mark, which is expected to go negative on
+                    // a beat's long tack even while sailing it correctly.
+                    bigReadout("VMC", value: race.vmgToMark.map { String(format: "%.1f", $0) } ?? "—", unit: "kts to mark")
                     bigReadout("RANGE", value: race.vector.map { String(format: "%.2f", $0.distNm) } ?? "—", unit: "nm")
                 }
 
