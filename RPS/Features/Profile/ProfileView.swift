@@ -20,6 +20,7 @@ struct ProfileView: View {
     @State private var showClubAdminAccess = false
     @State private var showChangePassword = false
     @State private var showInfo = false
+    @State private var showWaiver = false
     @State private var showSignOutConfirm = false
     @State private var showDeleteAccount = false
     @State private var errorMessage: String?
@@ -87,6 +88,7 @@ struct ProfileView: View {
 
                 Section("App") {
                     Button("Map Key & Disclaimer") { showInfo = true }
+                    Button("Assumption of Risk & Disclaimer") { showWaiver = true }
                 }
 
                 Section("About") {
@@ -146,6 +148,9 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showInfo) {
                 DisclaimerView()
+            }
+            .sheet(isPresented: $showWaiver) {
+                WaiverTextView()
             }
         }
     }
@@ -292,6 +297,40 @@ private struct ClubAdminAccessView: View {
             )
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+/// Read-only re-read of the waiver, reachable anytime from Settings -
+/// distinct from `WaiverGateView`, which is the mandatory accept-it-to-
+/// continue version shown by `RootView` for an account with no acceptance
+/// on file.
+private struct WaiverTextView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(Waiver.intro)
+                    Text(Waiver.leadIn)
+                    ForEach(Waiver.clauses) { clause in
+                        (Text(clause.title).fontWeight(.bold) + Text(" \(clause.body)"))
+                    }
+                    Text(Waiver.closing)
+                        .fontWeight(.semibold)
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding()
+            }
+            .navigationTitle("Assumption of Risk")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 }

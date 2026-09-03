@@ -65,6 +65,17 @@ final class AppState {
 
     var currentUser: User? { bootstrap?.user }
 
+    /// True once a signed-in user's own record has loaded and shows no
+    /// waiver acceptance on file - a brand-new registration already sends
+    /// acceptance with the account, so this only ever fires for one that
+    /// predates the waiver, or an older version of it. `RootView` shows a
+    /// mandatory gate ahead of club selection and the tab bar while this
+    /// is true.
+    var needsWaiverAcceptance: Bool {
+        guard let currentUser else { return false }
+        return currentUser.liabilityWaiverAcceptedAt == nil
+    }
+
     // MARK: - Deep links
 
     /// `rps://countdown` or `rps://leg`, from RPSRaceWidget's tap targets -
@@ -233,6 +244,11 @@ final class AppState {
 
     func changePassword(current: String, new: String) async throws {
         try await api.changePassword(current: current, new: new)
+    }
+
+    func acceptWaiver() async throws {
+        let updated = try await api.acceptWaiver()
+        bootstrap?.user = updated
     }
 
     func requestClubAdmin(clubSlug: String, message: String?) async throws -> ClubAdminRequest {

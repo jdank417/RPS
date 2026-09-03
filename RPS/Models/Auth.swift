@@ -37,11 +37,21 @@ struct RegisterRequest: Encodable {
     var email: String
     var password: String
     var fullName: String?
+    var acceptedWaiver: Bool
+    var waiverVersion: String
 
     enum CodingKeys: String, CodingKey {
         case email, password
         case fullName = "full_name"
+        case acceptedWaiver = "accepted_waiver"
+        case waiverVersion = "waiver_version"
     }
+}
+
+/// Body for `POST /users/me/accept-waiver`.
+struct AcceptWaiverRequest: Encodable {
+    var waiverVersion: String
+    enum CodingKeys: String, CodingKey { case waiverVersion = "waiver_version" }
 }
 
 struct RefreshRequest: Encodable {

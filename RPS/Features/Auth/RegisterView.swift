@@ -12,6 +12,7 @@ struct RegisterView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
+    @State private var acceptedWaiver = false
     @State private var isLoading = false
     @State private var errorMessage: String?
 
@@ -34,6 +35,13 @@ struct RegisterView: View {
                     .textContentType(.newPassword)
             }
             .textFieldStyle(.roundedBorder)
+
+            waiverBox
+
+            Toggle(isOn: $acceptedWaiver) {
+                Text("I have read and agree to the Assumption of Risk & Disclaimer above.")
+                    .font(.footnote)
+            }
 
             if let mismatchMessage {
                 Text(mismatchMessage)
@@ -63,6 +71,25 @@ struct RegisterView: View {
         }
     }
 
+    private var waiverBox: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(Waiver.intro)
+                Text(Waiver.leadIn)
+                ForEach(Waiver.clauses) { clause in
+                    (Text(clause.title).fontWeight(.bold) + Text(" \(clause.body)"))
+                }
+                Text(Waiver.closing)
+                    .fontWeight(.semibold)
+            }
+            .padding(10)
+        }
+        .frame(height: 180)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+    }
+
     private var mismatchMessage: String? {
         guard !confirmPassword.isEmpty, confirmPassword != password else { return nil }
         return "Passwords don't match yet."
@@ -72,6 +99,7 @@ struct RegisterView: View {
         !email.trimmingCharacters(in: .whitespaces).isEmpty
             && password.count >= 8
             && password == confirmPassword
+            && acceptedWaiver
     }
 
     private func register() async {

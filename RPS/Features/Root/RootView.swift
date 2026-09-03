@@ -2,8 +2,9 @@
 //  RootView.swift
 //  RPS
 //
-//  Switches between the launch spinner, sign-in, club selection, and the
-//  main tabbed app based on `AppState.phase`.
+//  Switches between the launch spinner, sign-in, the waiver gate, club
+//  selection, and the main tabbed app based on `AppState.phase` (and,
+//  ahead of both signed-in phases, `AppState.needsWaiverAcceptance`).
 //
 
 import SwiftUI
@@ -19,9 +20,17 @@ struct RootView: View {
             case .signedOut:
                 AuthGateView()
             case .needsClubSelection:
-                ClubPickerView()
+                if appState.needsWaiverAcceptance {
+                    WaiverGateView()
+                } else {
+                    ClubPickerView()
+                }
             case .ready:
-                AppTabView()
+                if appState.needsWaiverAcceptance {
+                    WaiverGateView()
+                } else {
+                    AppTabView()
+                }
             }
         }
         .task {

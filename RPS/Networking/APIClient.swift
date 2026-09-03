@@ -72,7 +72,14 @@ final class APIClient {
     // MARK: - Auth
 
     func register(email: String, password: String, fullName: String?) async throws -> AuthResponse {
-        try await send("/api/v1/auth/register", method: "POST", body: RegisterRequest(email: email, password: password, fullName: fullName), auth: false)
+        try await send(
+            "/api/v1/auth/register", method: "POST",
+            body: RegisterRequest(
+                email: email, password: password, fullName: fullName,
+                acceptedWaiver: true, waiverVersion: Waiver.currentVersion
+            ),
+            auth: false
+        )
     }
 
     /// `/auth/login` is an OAuth2 password form, not JSON.
@@ -119,6 +126,16 @@ final class APIClient {
 
     func updateMe(_ update: UserUpdate) async throws -> User {
         try await authorizedRequest("/api/v1/users/me", method: "PATCH", body: update)
+    }
+
+    /// Records waiver acceptance for an account that predates it, or whose
+    /// acceptance is for an older version of the wording - the retroactive
+    /// path for whatever `register` above already covers for new accounts.
+    func acceptWaiver() async throws -> User {
+        try await authorizedRequest(
+            "/api/v1/users/me/accept-waiver", method: "POST",
+            body: AcceptWaiverRequest(waiverVersion: Waiver.currentVersion)
+        )
     }
 
     /// Permanently deletes the signed-in account.

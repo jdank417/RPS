@@ -12,6 +12,11 @@ struct User: Codable, Identifiable, Equatable, Hashable {
     var homeClubId: UUID?
     var isActive: Bool
     var isSuperuser: Bool
+    /// Nil means the waiver gate should show before anything else in the
+    /// app. Kept as the raw ISO 8601 string rather than `Date` - nothing
+    /// in the app needs to read the timestamp itself, only whether it's
+    /// present, and the shared decoder has no date strategy configured.
+    var liabilityWaiverAcceptedAt: String?
 
     enum CodingKeys: String, CodingKey {
         case id, email
@@ -19,6 +24,7 @@ struct User: Codable, Identifiable, Equatable, Hashable {
         case homeClubId = "home_club_id"
         case isActive = "is_active"
         case isSuperuser = "is_superuser"
+        case liabilityWaiverAcceptedAt = "liability_waiver_accepted_at"
     }
 }
 
