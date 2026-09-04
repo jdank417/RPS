@@ -130,9 +130,6 @@ struct CourseBuilderView: View {
                 }
             }
             .task { await loadInitialMarksIfNeeded() }
-            .onChange(of: course.course) { _, _ in course.persist() }
-            .onChange(of: course.twiceAround) { _, _ in course.persist() }
-            .onChange(of: course.startUid) { _, _ in course.persist() }
         }
     }
 
@@ -265,6 +262,17 @@ struct CourseBuilderView: View {
         )
     }
 
+    /// The government number is physically printed on the buoy, so it's what
+    /// a sailor standing next to it can actually check against - the code
+    /// and name alone assume you already trust the chart.
+    private func pinMarkLabel(_ mark: Mark) -> String {
+        var label = "\(mark.code) — \(mark.name)"
+        if let govNumber = mark.govNumber, !govNumber.isEmpty {
+            label += " (No. \(govNumber))"
+        }
+        return label
+    }
+
     private var startLineSection: some View {
         Section {
             Picker("Where is the start line?", selection: startLineChoiceBinding) {
@@ -283,7 +291,7 @@ struct CourseBuilderView: View {
                     Picker("Pin mark", selection: chartedStartMarkBinding) {
                         Text("Choose a mark").tag(Optional<Mark>.none)
                         ForEach(chartedStartCandidates) { mark in
-                            Text("\(mark.code) — \(mark.name)").tag(Optional(mark))
+                            Text(pinMarkLabel(mark)).tag(Optional(mark))
                         }
                     }
                 }
@@ -397,6 +405,7 @@ struct CourseBuilderView: View {
                             withAnimation(CourseMotion.start) {
                                 course.startUid = entry.uid
                             }
+                            course.persist()
                         } label: {
                             Label("Start", systemImage: "flag.checkered")
                         }

@@ -25,6 +25,10 @@ struct CourseMapView: View {
     /// one close enough to be useful. Nil hides the current toggle
     /// entirely, same reasoning as `windFromDeg`.
     var current: TidalCurrentPoint? = nil
+    /// Every mark in the currently active list, charted or not - the "show
+    /// all marks" button briefly reveals whichever of these have a fixed
+    /// position, beyond just the ones plotted into the course.
+    var allMarks: [Mark] = []
     /// Extra bottom inset so overlaid chrome (the leg toolbar in Race Mode)
     /// never sits on top of the course itself.
     var bottomContentInset: CGFloat = 0
@@ -44,8 +48,40 @@ struct CourseMapView: View {
     @State private var hybrid = false
     @State private var showWind = false
     @State private var showCurrent = false
+    @State private var showAllMarks = false
+    @State private var allMarksTask: Task<Void, Never>?
+    /// How long "show all marks" stays up before reverting on its own -
+    /// long enough to read the marks near the boat, short enough that the
+    /// course view is what's on screen the rest of the time.
+    private static let allMarksDuration: Duration = .seconds(6)
 
     private var placedPoints: [MapPoint] { mapPoints.compactMap { $0 } }
+
+    /// A charted-only local wrapper for `allMarks`, so the overlay never
+    /// needs to force-unwrap a mark's optional position, and so a mark
+    /// already part of the plotted course doesn't get a second, overlapping
+    /// badge drawn on top of the one `markAnnotations` already places.
+    private struct ExtraMark: Identifiable {
+        let id: UUID
+        let code: String
+        let name: String
+        let govtLight: String?
+        let portable: Bool
+        let coordinate: CLLocationCoordinate2D
+    }
+
+    private var extraMarks: [ExtraMark] {
+        let placedCodes = Set(placedPoints.map(\.label))
+        return allMarks.compactMap { mark in
+            guard let lat = mark.lat, let lon = mark.lon, !placedCodes.contains(mark.code) else {
+                return nil
+            }
+            return ExtraMark(
+                id: mark.id, code: mark.code, name: mark.name, govtLight: mark.govtLight,
+                portable: mark.portable, coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon)
+            )
+        }
+    }
 
     /// Identifies the current set of plotted positions. Coordinates are
     /// rounded before hashing so GPS jitter on a placed portable mark doesn't
@@ -92,6 +128,7 @@ struct CourseMapView: View {
             startLineContent
             legArrowContent
             markAnnotations
+            allMarksContent
             boatAnnotation
         }
         .onMapCameraChange(frequency: .continuous) { context in
@@ -149,6 +186,12 @@ struct CourseMapView: View {
                 followBoat = false
                 fitToCourse()
             }
+
+            mapButton(systemImage: "eye", isOn: showAllMarks, label: "Show all marks") {
+                followBoat = false
+                toggleAllMarks()
+            }
+            .disabled(extraMarks.isEmpty)
 
             mapButton(systemImage: hybrid ? "globe.americas.fill" : "map", isOn: hybrid, label: "Satellite") {
                 hybrid.toggle()
@@ -274,6 +317,21 @@ struct CourseMapView: View {
         }
     }
 
+    /// The "show all marks" reveal - every other charted mark in the active
+    /// list, dimmed so the plotted course still reads as the main event.
+    @MapContentBuilder
+    private var allMarksContent: some MapContent {
+        if showAllMarks {
+            ForEach(extraMarks) { mark in
+                Annotation(mark.name, coordinate: mark.coordinate) {
+                    MarkBadge(code: mark.code, govtLight: mark.govtLight, portable: mark.portable, size: 24)
+                        .opacity(0.7)
+                }
+                .annotationTitles(.hidden)
+            }
+        }
+    }
+
     @MapContentBuilder
     private var boatAnnotation: some MapContent {
         if let liveFix {
@@ -329,6 +387,48 @@ struct CourseMapView: View {
         let span = MKCoordinateSpan(
             latitudeDelta: max((lats.max()! - lats.min()!) * 1.9, 0.012),
             longitudeDelta: max((lons.max()! - lons.min()!) * 1.9, 0.012)
+        )
+        camera = .region(MKCoordinateRegion(center: center, span: span))
+    }
+
+    private func toggleAllMarks() {
+        allMarksTask?.cancel()
+        if showAllMarks {
+            showAllMarks = false
+            fitToCourse()
+            return
+        }
+        showAllMarks = true
+        fitToAllMarks()
+        allMarksTask = Task {
+            try? await Task.sleep(for: Self.allMarksDuration)
+            guard !Task.isCancelled else { return }
+            showAllMarks = false
+            fitToCourse()
+        }
+    }
+
+    private func fitToAllMarks() {
+        let coords = extraMarks.map(\.coordinate) + placedPoints.map(\.coordinate)
+        guard !coords.isEmpty else { return }
+
+        if coords.count == 1 {
+            camera = .region(MKCoordinateRegion(
+                center: coords[0],
+                span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
+            ))
+            return
+        }
+
+        let lats = coords.map(\.latitude)
+        let lons = coords.map(\.longitude)
+        let center = CLLocationCoordinate2D(
+            latitude: (lats.min()! + lats.max()!) / 2,
+            longitude: (lons.min()! + lons.max()!) / 2
+        )
+        let span = MKCoordinateSpan(
+            latitudeDelta: max((lats.max()! - lats.min()!) * 1.3, 0.02),
+            longitudeDelta: max((lons.max()! - lons.min()!) * 1.3, 0.02)
         )
         camera = .region(MKCoordinateRegion(center: center, span: span))
     }

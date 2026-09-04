@@ -38,7 +38,7 @@ enum GeoMath {
         return (toDeg(atan2(y, x)) + 360).truncatingRemainder(dividingBy: 360)
     }
 
-    struct LatLon: Equatable {
+    struct LatLon: Codable, Equatable {
         var lat: Double
         var lon: Double
     }

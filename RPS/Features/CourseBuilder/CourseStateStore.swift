@@ -225,6 +225,7 @@ final class CourseStateStore {
             updated.mark = fresh
             return updated
         }
+        persist()
     }
 
     func resetCourse() {
@@ -233,6 +234,7 @@ final class CourseStateStore {
         startUid = nil
         positionTargetUid = nil
         setStatus(nil)
+        persist()
     }
 
     // MARK: - Building
@@ -254,6 +256,7 @@ final class CourseStateStore {
         uidCounter += 1
         course.append(CourseEntry(uid: uidCounter, mark: mark, overrideLat: nil, overrideLon: nil, rounding: nil))
         setStatus(nil)
+        persist()
         return true
     }
 
@@ -261,10 +264,12 @@ final class CourseStateStore {
         course.removeAll { $0.uid == uid }
         if positionTargetUid == uid { positionTargetUid = nil }
         if startUid == uid { startUid = nil }
+        persist()
     }
 
     func moveMark(fromOffsets: IndexSet, toOffset: Int) {
         course.move(fromOffsets: fromOffsets, toOffset: toOffset)
+        persist()
     }
 
     // MARK: - Rounding
@@ -276,19 +281,23 @@ final class CourseStateStore {
     func cycleEntryRounding(uid: Int) {
         guard let idx = course.firstIndex(where: { $0.uid == uid }) else { return }
         course[idx].rounding = cycleRounding(course[idx].rounding)
+        persist()
     }
 
     func cycleDefaultRounding() {
         defaultRounding = cycleRounding(defaultRounding)
+        persist()
     }
 
     func toggleTwiceAround() {
         twiceAround.toggle()
+        persist()
     }
 
     func setVariationDeg(_ deg: Double) {
         variationDeg = deg
         settings.variationDeg = deg
+        persist()
     }
 
     // MARK: - Start / position placement
@@ -381,6 +390,7 @@ final class CourseStateStore {
             (chosen != nil ? "Placed " : "Start ") + target.mark.code + " from " + sourceLabel
                 + (count > 1 ? " — applied to \(count) marks." : ".")
         )
+        persist()
         return (target.mark.code, count)
     }
 
@@ -415,6 +425,7 @@ final class CourseStateStore {
         startUid = entryUid
         positionTargetUid = nil
         setStatus("Start set at \(mark.code) — \(mark.name).")
+        persist()
         return true
     }
 
@@ -434,6 +445,7 @@ final class CourseStateStore {
             startUid = ensureStartEntry().uid
         }
         setStatus("Start will be pinged live — use \"Ping Pin\" in Race Mode.")
+        persist()
     }
 
     // MARK: - Commit
@@ -453,6 +465,7 @@ final class CourseStateStore {
         }
         committed = true
         setStatus(nil)
+        persist()
         return true
     }
 

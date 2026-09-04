@@ -45,10 +45,23 @@ final class RaceViewModel {
     /// never has a position worth trusting from the chart.
     private(set) var committee: GeoMath.LatLon?
 
+    /// Mirrors `CourseStateStore`'s own UserDefaults persistence, so a pinged
+    /// start line survives the app being backgrounded or relaunched — the
+    /// pings are as much "in-progress course setup" as the marks are, and a
+    /// sailor closing the app mid-start-sequence shouldn't have to re-ping.
+    /// Cleared only by `clearLine()`, same as on-screen.
+    private struct PersistedLine: Codable {
+        var pin: GeoMath.LatLon?
+        var committee: GeoMath.LatLon?
+    }
+
+    private static let lineCacheKey = "rps.cache.startLine"
+
     init(courseStore: CourseStateStore, liveStore: LivePositionStore, windService: WindService) {
         self.courseStore = courseStore
         self.liveStore = liveStore
         self.windService = windService
+        restoreLine()
     }
 
     // MARK: - Start line
@@ -70,16 +83,37 @@ final class RaceViewModel {
     func pingPin() {
         guard let fix = liveStore.fix else { return }
         pingedPin = GeoMath.LatLon(lat: fix.lat, lon: fix.lon)
+        persistLine()
     }
 
     func pingCommittee() {
         guard let fix = liveStore.fix else { return }
         committee = GeoMath.LatLon(lat: fix.lat, lon: fix.lon)
+        persistLine()
     }
 
     func clearLine() {
         pingedPin = nil
         committee = nil
+        persistLine()
+    }
+
+    private func persistLine() {
+        let snapshot = PersistedLine(pin: pingedPin, committee: committee)
+        guard snapshot.pin != nil || snapshot.committee != nil else {
+            UserDefaults.standard.removeObject(forKey: Self.lineCacheKey)
+            return
+        }
+        if let data = try? JSONEncoder().encode(snapshot) {
+            UserDefaults.standard.set(data, forKey: Self.lineCacheKey)
+        }
+    }
+
+    private func restoreLine() {
+        guard let data = UserDefaults.standard.data(forKey: Self.lineCacheKey),
+              let saved = try? JSONDecoder().decode(PersistedLine.self, from: data) else { return }
+        pingedPin = saved.pin
+        committee = saved.committee
     }
 
     /// The mark the first leg is sailed to — used both as the "which way is
