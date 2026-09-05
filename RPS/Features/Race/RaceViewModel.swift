@@ -106,6 +106,10 @@ final class RaceViewModel {
         }
         if let data = try? JSONEncoder().encode(snapshot) {
             UserDefaults.standard.set(data, forKey: Self.lineCacheKey)
+            // See CourseStateStore.persist(): forces the write to actually
+            // reach disk before a force-quit right after pinging can kill
+            // the process mid-flush.
+            UserDefaults.standard.synchronize()
         }
     }
 

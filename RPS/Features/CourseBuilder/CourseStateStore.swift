@@ -145,6 +145,12 @@ final class CourseStateStore {
         }
         if let data = try? JSONEncoder().encode(snapshot) {
             UserDefaults.standard.set(data, forKey: Self.cacheKey)
+            // `set` alone queues the write asynchronously; a force-quit right
+            // after an edit (double-tap the app switcher, swipe away) can
+            // kill the process before that write actually reaches disk.
+            // `synchronize` is deprecated but still the only way to block
+            // until it does, which is exactly what's needed here.
+            UserDefaults.standard.synchronize()
         }
     }
 

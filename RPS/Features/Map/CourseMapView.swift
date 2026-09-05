@@ -187,9 +187,14 @@ struct CourseMapView: View {
                 fitToCourse()
             }
 
-            mapButton(systemImage: "eye", isOn: showAllMarks, label: "Show all marks") {
+            mapButton(isOn: showAllMarks, label: "Show all marks") {
                 followBoat = false
                 toggleAllMarks()
+            } icon: {
+                // A miniature red/green junction badge rather than a generic
+                // system glyph — it reads as "marks" at a glance, the same
+                // way the marks themselves do once revealed.
+                MarkBadge(code: "", govtLight: "RG", portable: false, size: 16)
             }
             .disabled(extraMarks.isEmpty)
 
@@ -231,14 +236,30 @@ struct CourseMapView: View {
     }
 
     private func mapButton(systemImage: String, isOn: Bool, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        mapButton(isOn: isOn, label: label, action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(isOn ? Color.accentColor : Color.primary)
+        }
+    }
+
+    /// Same button chrome as the system-image variant, for a control whose
+    /// icon is a custom view (the "show all marks" mark badge) rather than
+    /// an SF Symbol.
+    private func mapButton(
+        isOn: Bool, label: String, action: @escaping () -> Void, @ViewBuilder icon: () -> some View
+    ) -> some View {
+        Button(action: action) {
+            icon()
                 // 44pt is Apple's minimum comfortable tap target, and this is
                 // a control pressed on a moving boat.
                 .frame(width: 44, height: 44)
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                .foregroundStyle(isOn ? Color.accentColor : Color.primary)
+                .overlay {
+                    if isOn {
+                        RoundedRectangle(cornerRadius: 12).strokeBorder(Color.accentColor, lineWidth: 2)
+                    }
+                }
         }
         .accessibilityLabel(label)
         .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
