@@ -535,9 +535,17 @@ struct CourseBuilderView: View {
 
     private func loadInitialMarksIfNeeded() async {
         guard course.activeMarks.isEmpty, let bootstrap = appState.bootstrap else { return }
-        course.setActiveMarks(bootstrap.marks)
+        // CourseStateStore.init already restored a cached course (if any)
+        // against whatever list it was built from. Calling setActiveMarks
+        // with the default keepCourse: false here would immediately reset
+        // and wipe that just-restored course before restoreFor below ever
+        // got a chance to use it - which is why a course used to vanish on
+        // every cold launch. keepCourse: true when it's the same list
+        // preserves it instead, same as the other two call sites.
+        let sameList = course.activeMarkListId == bootstrap.selectedMarkListId
+        course.setActiveMarks(bootstrap.marks, keepCourse: sameList)
         course.setMarkListId(bootstrap.selectedMarkListId)
-        course.restoreFor(markListId: bootstrap.selectedMarkListId)
+        if !sameList { course.restoreFor(markListId: bootstrap.selectedMarkListId) }
     }
 
     /// Pull to refresh: re-fetches the loaded list's marks past the cache, so

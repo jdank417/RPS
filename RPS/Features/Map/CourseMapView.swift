@@ -412,46 +412,21 @@ struct CourseMapView: View {
         camera = .region(MKCoordinateRegion(center: center, span: span))
     }
 
+    /// Just reveals the extra marks where they already are on the current
+    /// view - it never moves the camera, so glancing at what's nearby
+    /// doesn't cost you the zoom/pan you had set up.
     private func toggleAllMarks() {
         allMarksTask?.cancel()
         if showAllMarks {
             showAllMarks = false
-            fitToCourse()
             return
         }
         showAllMarks = true
-        fitToAllMarks()
         allMarksTask = Task {
             try? await Task.sleep(for: Self.allMarksDuration)
             guard !Task.isCancelled else { return }
             showAllMarks = false
-            fitToCourse()
         }
-    }
-
-    private func fitToAllMarks() {
-        let coords = extraMarks.map(\.coordinate) + placedPoints.map(\.coordinate)
-        guard !coords.isEmpty else { return }
-
-        if coords.count == 1 {
-            camera = .region(MKCoordinateRegion(
-                center: coords[0],
-                span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
-            ))
-            return
-        }
-
-        let lats = coords.map(\.latitude)
-        let lons = coords.map(\.longitude)
-        let center = CLLocationCoordinate2D(
-            latitude: (lats.min()! + lats.max()!) / 2,
-            longitude: (lons.min()! + lons.max()!) / 2
-        )
-        let span = MKCoordinateSpan(
-            latitudeDelta: max((lats.max()! - lats.min()!) * 1.3, 0.02),
-            longitudeDelta: max((lons.max()! - lons.min()!) * 1.3, 0.02)
-        )
-        camera = .region(MKCoordinateRegion(center: center, span: span))
     }
 }
 
