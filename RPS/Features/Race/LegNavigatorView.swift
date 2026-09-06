@@ -97,6 +97,15 @@ private struct LegPage: View {
     /// Pings this leg's target mark at the boat's current GPS position.
     let onPingMark: () -> Void
 
+    /// These three numbers are the entire point of this screen, so they're
+    /// the ones that should actually grow for a sailor who has turned their
+    /// text size up rather than staying frozen - the surrounding layout's
+    /// own minimumScaleFactor already protects against overflow if a page
+    /// can't fit the scaled-up size.
+    @ScaledMetric(relativeTo: .largeTitle) private var headingSize: CGFloat = 62
+    @ScaledMetric(relativeTo: .title) private var liveHeadingSize: CGFloat = 28
+    @ScaledMetric(relativeTo: .title2) private var statValueSize: CGFloat = 30
+
     var body: some View {
         // Deliberately no ScrollView: everything about this page is meant to
         // be read in a glance from the helm, and a page you have to scroll
@@ -261,7 +270,7 @@ private struct LegPage: View {
             }
             if let liveHeadingDeg {
                 Text(GeoMath.fmtHeading(liveHeadingDeg))
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(.system(size: liveHeadingSize, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .contentTransition(.numericText())
                 if let offCourseDeg {
@@ -327,7 +336,7 @@ private struct LegPage: View {
     private var headingBlock: some View {
         VStack(spacing: 2) {
             Text(GeoMath.fmtHeading(primaryHeading))
-                .font(.system(size: 62, weight: .heavy, design: .rounded))
+                .font(.system(size: headingSize, weight: .heavy, design: .rounded))
                 .monospacedDigit()
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
@@ -364,7 +373,7 @@ private struct LegPage: View {
                 .tracking(1)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-            Text(value).font(.system(size: 30, weight: .bold, design: .rounded)).monospacedDigit()
+            Text(value).font(.system(size: statValueSize, weight: .bold, design: .rounded)).monospacedDigit()
             Text(unit)
                 .font(.caption2)
                 .foregroundStyle(.secondary)

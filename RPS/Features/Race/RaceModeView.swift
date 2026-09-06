@@ -41,6 +41,7 @@ struct RaceModeView: View {
     @Environment(StartSequenceViewModel.self) private var sequence
     @Environment(RaceLiveActivityManager.self) private var liveActivity
     @Binding var selectedSegment: Segment
+    @State private var showGlossary = false
 
     var body: some View {
         NavigationStack {
@@ -80,6 +81,13 @@ struct RaceModeView: View {
             .navigationTitle(selectedSegment.rawValue)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showGlossary = true
+                    } label: {
+                        Label("What do these terms mean?", systemImage: "questionmark.circle")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         liveStore.toggle()
@@ -89,6 +97,7 @@ struct RaceModeView: View {
                     .tint(liveStore.tracking ? .green : .secondary)
                 }
             }
+            .sheet(isPresented: $showGlossary) { SailingGlossaryView() }
         }
         // Not userInitiated: if the sailor deliberately stopped GPS, coming
         // back to this tab must not silently restart it.
@@ -223,6 +232,10 @@ struct RaceModeView: View {
 private struct InstrumentsView: View {
     @Environment(RaceViewModel.self) private var race
     @Environment(LivePositionStore.self) private var liveStore
+    /// The whole point of this screen is these numbers, so they're the ones
+    /// that should actually grow for a sailor who has turned their text
+    /// size up rather than staying frozen at a fixed pixel size.
+    @ScaledMetric(relativeTo: .title) private var readoutValueSize: CGFloat = 40
 
     var body: some View {
         ScrollView {
@@ -368,7 +381,7 @@ private struct InstrumentsView: View {
     private func bigReadout(_ title: String, value: String, unit: String) -> some View {
         VStack(spacing: 4) {
             Text(title).font(.caption.weight(.bold)).foregroundStyle(.secondary).tracking(1.5)
-            Text(value).font(.system(size: 40, weight: .bold, design: .rounded)).monospacedDigit()
+            Text(value).font(.system(size: readoutValueSize, weight: .bold, design: .rounded)).monospacedDigit()
             Text(unit).font(.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, minHeight: 100)

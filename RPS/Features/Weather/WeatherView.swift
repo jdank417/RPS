@@ -20,6 +20,11 @@ struct WeatherView: View {
     @Environment(TidalCurrentService.self) private var tidalService
     @State private var service = RaceWeatherService()
     @State private var showCustomizeSheet = false
+    /// Lets the big temperature number grow with the system text-size
+    /// setting instead of staying frozen at a fixed pixel size - one of the
+    /// few numbers on this screen that matters most to a sailor who has
+    /// turned their text size up.
+    @ScaledMetric(relativeTo: .largeTitle) private var temperatureSize: CGFloat = 40
 
     /// How many of the fetched hours to actually show. Persisted, so the
     /// choice sticks between races rather than resetting every launch.
@@ -310,7 +315,7 @@ struct WeatherView: View {
                     .font(.system(size: 36))
                     .symbolRenderingMode(.multicolor)
                 Text(snapshot.temperature.formatted(.measurement(width: .abbreviated, numberFormatStyle: .number.precision(.fractionLength(0)))))
-                    .font(.system(size: 40, weight: .bold, design: .rounded))
+                    .font(.system(size: temperatureSize, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)

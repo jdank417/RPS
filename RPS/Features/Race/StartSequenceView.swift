@@ -12,6 +12,9 @@ import SwiftUI
 
 struct StartSequenceView: View {
     @Environment(StartSequenceViewModel.self) private var sequence
+    /// The one number on this whole screen - lets it grow with the system
+    /// text-size setting instead of staying frozen at a fixed pixel size.
+    @ScaledMetric(relativeTo: .largeTitle) private var countdownSize: CGFloat = 104
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,7 +27,7 @@ struct StartSequenceView: View {
                     .tracking(1.5)
 
                 Text(sequence.display)
-                    .font(.system(size: 104, weight: .black, design: .rounded))
+                    .font(.system(size: countdownSize, weight: .black, design: .rounded))
                     .monospacedDigit()
                     .minimumScaleFactor(0.4)
                     .lineLimit(1)

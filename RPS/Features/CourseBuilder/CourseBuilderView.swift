@@ -377,10 +377,28 @@ struct CourseBuilderView: View {
                     .listRowSeparator(.hidden)
             } else {
                 ForEach(Array(course.course.enumerated()), id: \.element.uid) { index, entry in
+                    let isStart = course.isStartEntry(entry, index: index)
+                    // Shared by the row's always-visible "more actions" menu
+                    // and its swipe actions, so a sailor who never learns
+                    // swipe gestures exist has the exact same three options
+                    // as one who does.
+                    let place = { placingEntry = entry }
+                    let toggleStart = {
+                        withAnimation(CourseMotion.start) {
+                            course.startUid = isStart ? nil : entry.uid
+                        }
+                        course.persist()
+                    }
+                    let remove = {
+                        withAnimation(CourseMotion.remove) {
+                            course.removeMark(uid: entry.uid)
+                        }
+                    }
+
                     CourseEntryRow(
                         entry: entry,
                         index: index,
-                        isStart: course.isStartEntry(entry, index: index),
+                        isStart: isStart,
                         effectiveRounding: course.effectiveRounding(entry),
                         needsPosition: resolvedPosition(entry) == nil,
                         isInherited: entry.rounding == nil,
@@ -388,7 +406,10 @@ struct CourseBuilderView: View {
                             withAnimation(CourseMotion.rounding) {
                                 course.cycleEntryRounding(uid: entry.uid)
                             }
-                        }
+                        },
+                        onPlace: place,
+                        onToggleStart: toggleStart,
+                        onRemove: remove
                     )
                     // A mark slides in from the palette below and lifts back
                     // out the way it came, rather than the default fade that
@@ -398,18 +419,12 @@ struct CourseBuilderView: View {
                         removal: .move(edge: .trailing).combined(with: .opacity)
                     ))
                     .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            withAnimation(CourseMotion.remove) {
-                                course.removeMark(uid: entry.uid)
-                            }
-                        } label: {
+                        Button(role: .destructive, action: remove) {
                             Label("Remove", systemImage: "trash")
                         }
                     }
                     .swipeActions(edge: .leading) {
-                        Button {
-                            placingEntry = entry
-                        } label: {
+                        Button(action: place) {
                             Label("Place", systemImage: "mappin.and.ellipse")
                         }
                         .tint(.orange)
@@ -418,27 +433,10 @@ struct CourseBuilderView: View {
                         // does nothing when tapped again - and it's neutral,
                         // not red, since this only changes which mark is the
                         // start, it doesn't remove anything from the course.
-                        if course.isStartEntry(entry, index: index) {
-                            Button {
-                                withAnimation(CourseMotion.start) {
-                                    course.startUid = nil
-                                }
-                                course.persist()
-                            } label: {
-                                Label("Unset Start", systemImage: "flag.slash")
-                            }
-                            .tint(.gray)
-                        } else {
-                            Button {
-                                withAnimation(CourseMotion.start) {
-                                    course.startUid = entry.uid
-                                }
-                                course.persist()
-                            } label: {
-                                Label("Start", systemImage: "flag.checkered")
-                            }
-                            .tint(.green)
+                        Button(action: toggleStart) {
+                            Label(isStart ? "Unset Start" : "Start", systemImage: isStart ? "flag.slash" : "flag.checkered")
                         }
+                        .tint(isStart ? .gray : .green)
                     }
                 }
                 .onMove { from, to in
@@ -636,6 +634,9 @@ private struct CourseEntryRow: View {
     /// the RC's course-wide signal.
     let isInherited: Bool
     let onCycleRounding: () -> Void
+    let onPlace: () -> Void
+    let onToggleStart: () -> Void
+    let onRemove: () -> Void
 
     var body: some View {
         HStack(spacing: 14) {
@@ -688,6 +689,28 @@ private struct CourseEntryRow: View {
             .accessibilityLabel("Rounding for \(entry.mark.code)")
             .accessibilityValue(effectiveRounding.map { roundingWord($0) } ?? "not set")
             .accessibilityHint("Cycles starboard, port, or follow the RC signal")
+
+            // The same three actions the swipe gestures offer, but always
+            // visible - swiping a list row to reveal hidden buttons is easy
+            // to miss if you've never used an iPhone list before.
+            Menu {
+                Button(action: onPlace) {
+                    Label("Place on Map", systemImage: "mappin.and.ellipse")
+                }
+                Button(action: onToggleStart) {
+                    Label(isStart ? "Unset Start" : "Set as Start", systemImage: isStart ? "flag.slash" : "flag.checkered")
+                }
+                Divider()
+                Button(role: .destructive, action: onRemove) {
+                    Label("Remove from Course", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 32, height: 32)
+            }
+            .accessibilityLabel("More actions for \(entry.mark.code)")
         }
         .padding(.vertical, 4)
     }
