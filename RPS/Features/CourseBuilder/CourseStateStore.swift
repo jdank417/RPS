@@ -400,6 +400,26 @@ final class CourseStateStore {
         return (target.mark.code, count)
     }
 
+    /// Applies a live GPS fix straight to a known mark by code, bypassing
+    /// `positionTargetUid` - used by Race Mode's "Ping mark" control on a leg
+    /// whose target mark has no position yet (an RC-placed windward/leeward
+    /// mark, say), so it doesn't need a trip back to the course builder.
+    /// Applied to every entry sharing the code, same as `applyPosition`.
+    @discardableResult
+    func pingMark(code: String, lat: Double, lon: Double) -> Bool {
+        guard course.contains(where: { $0.mark.code == code }) else { return false }
+        course = course.map { entry in
+            guard entry.mark.code == code else { return entry }
+            var updated = entry
+            updated.overrideLat = lat
+            updated.overrideLon = lon
+            return updated
+        }
+        setStatus("Pinged \(code) from your GPS position.")
+        persist()
+        return true
+    }
+
     /// Sets the start at a charted (non-portable) mark. Returns false (with a
     /// status message) if the mark has no charted position.
     @discardableResult

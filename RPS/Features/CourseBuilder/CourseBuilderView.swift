@@ -40,6 +40,11 @@ struct CourseBuilderView: View {
     @State private var showRCClubPicker = false
     @State private var showVariationSheet = false
     @State private var placingEntry: CourseEntry?
+    /// Which palette mark just got tapped into the course, so its row can
+    /// flash a green checkmark in place of the plus icon - the list itself
+    /// scrolls as it grows, so a confirmation on the row you actually tapped
+    /// reads better than one attached to wherever the new entry landed.
+    @State private var justAddedMarkID: UUID?
     @State private var isLoadingMarks = false
     @State private var errorMessage: String?
     /// Tracks a start-line choice the sailor just made in the UI before the
@@ -71,10 +76,14 @@ struct CourseBuilderView: View {
                 paletteSection
             }
             .refreshable { await reloadMarks() }
-            // A light tap when a mark lands in the course - the same
-            // confirmation a physical control gives, which matters when the
-            // phone is being used one-handed and half-watched.
-            .sensoryFeedback(.impact(flexibility: .soft), trigger: course.course.count)
+            // A distinct confirmation tap when a mark lands in the course
+            // (and a softer one when it leaves) - matters when the phone is
+            // being used one-handed and half-watched.
+            .sensoryFeedback(trigger: course.course.count) { old, new in
+                if new > old { return .success }
+                if new < old { return .impact(flexibility: .soft) }
+                return nil
+            }
             .animation(CourseMotion.list, value: course.course)
             .navigationTitle(markListName)
             .navigationBarTitleDisplayMode(.inline)
@@ -401,15 +410,32 @@ struct CourseBuilderView: View {
                             Label("Place", systemImage: "mappin.and.ellipse")
                         }
                         .tint(.orange)
-                        Button {
-                            withAnimation(CourseMotion.start) {
-                                course.startUid = entry.uid
+                        // Once a mark IS the start, the same slot toggles it
+                        // back off instead of staying a "Start" button that
+                        // does nothing when tapped again - and it's neutral,
+                        // not red, since this only changes which mark is the
+                        // start, it doesn't remove anything from the course.
+                        if course.isStartEntry(entry, index: index) {
+                            Button {
+                                withAnimation(CourseMotion.start) {
+                                    course.startUid = nil
+                                }
+                                course.persist()
+                            } label: {
+                                Label("Unset Start", systemImage: "flag.slash")
                             }
-                            course.persist()
-                        } label: {
-                            Label("Start", systemImage: "flag.checkered")
+                            .tint(.gray)
+                        } else {
+                            Button {
+                                withAnimation(CourseMotion.start) {
+                                    course.startUid = entry.uid
+                                }
+                                course.persist()
+                            } label: {
+                                Label("Start", systemImage: "flag.checkered")
+                            }
+                            .tint(.green)
                         }
-                        .tint(.green)
                     }
                 }
                 .onMove { from, to in
@@ -434,13 +460,15 @@ struct CourseBuilderView: View {
             } else {
                 ForEach(course.activeMarks) { mark in
                     Button {
-                        // `_ =` matters: addMark is @discardableResult but
-                        // still returns Bool, so without it this single-
-                        // expression closure infers a Bool return that
-                        // withAnimation cannot reconcile with the Button
-                        // action's Void.
+                        var added = false
                         withAnimation(CourseMotion.add) {
-                            _ = course.addMark(mark)
+                            added = course.addMark(mark)
+                        }
+                        guard added else { return }
+                        justAddedMarkID = mark.id
+                        Task {
+                            try? await Task.sleep(for: .milliseconds(700))
+                            if justAddedMarkID == mark.id { justAddedMarkID = nil }
                         }
                     } label: {
                         HStack(spacing: 12) {
@@ -471,7 +499,10 @@ struct CourseBuilderView: View {
                                 }
                             }
                             Spacer(minLength: 8)
-                            Image(systemName: "plus.circle.fill").foregroundStyle(.tint)
+                            Image(systemName: justAddedMarkID == mark.id ? "checkmark.circle.fill" : "plus.circle.fill")
+                                .foregroundStyle(justAddedMarkID == mark.id ? Color.green : Color.accentColor)
+                                .contentTransition(.symbolEffect(.replace))
+                                .animation(.snappy, value: justAddedMarkID)
                         }
                         .padding(.vertical, 2)
                     }

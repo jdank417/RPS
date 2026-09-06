@@ -57,7 +57,12 @@ struct LegNavigatorView: View {
                             wind: windService.wind,
                             windIsStale: windService.stale,
                             liveHeadingDeg: liveHeadingDeg,
-                            offCourseDeg: offCourseDeg
+                            offCourseDeg: offCourseDeg,
+                            canPingMark: liveStore.fix != nil,
+                            onPingMark: {
+                                guard let fix = liveStore.fix else { return }
+                                course.pingMark(code: leg.toMark.code, lat: fix.lat, lon: fix.lon)
+                            }
                         )
                         .tag(leg.legIndex)
                     }
@@ -86,6 +91,11 @@ private struct LegPage: View {
     let liveHeadingDeg: Double?
     /// Signed degrees the mark sits off that live heading, negative to port.
     let offCourseDeg: Double?
+    /// Whether there's a live GPS fix to ping the missing mark's position
+    /// with right now.
+    let canPingMark: Bool
+    /// Pings this leg's target mark at the boat's current GPS position.
+    let onPingMark: () -> Void
 
     var body: some View {
         // Deliberately no ScrollView: everything about this page is meant to
@@ -100,8 +110,19 @@ private struct LegPage: View {
                 ContentUnavailableView(
                     "Position missing",
                     systemImage: "questionmark.diamond",
-                    description: Text("Set a position for \(leg.toLabel) in the course builder.")
+                    description: Text(canPingMark
+                        ? "Ping it from right here, or set a position for \(leg.toLabel) in the course builder."
+                        : "Set a position for \(leg.toLabel) in the course builder.")
                 )
+                if canPingMark {
+                    Button(action: onPingMark) {
+                        Label("Ping \(leg.toMark.code) Here", systemImage: "location.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .padding(.horizontal, 40)
+                }
                 Spacer()
             } else {
                 // Heading and the wind picture side by side rather than
