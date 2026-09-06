@@ -36,22 +36,19 @@ final class RaceViewModel {
     let liveStore: LivePositionStore
     let windService: WindService
 
-    /// The pinned GPS fix for the pin end, when the start isn't a charted
-    /// mark. Ignored in favour of the course's own position whenever it is
-    /// — see `pin` below.
-    private var pingedPin: GeoMath.LatLon?
     /// The pinged GPS fix for the committee-boat end, stamped by "Ping
     /// Committee Boat". Always a live ping: a boat, unlike a charted mark,
-    /// never has a position worth trusting from the chart.
+    /// never has a position worth trusting from the chart, and it isn't a
+    /// course entry the way the pin end is - there's no leg that starts or
+    /// ends "at the committee boat" for it to live on.
     private(set) var committee: GeoMath.LatLon?
 
-    /// Mirrors `CourseStateStore`'s own UserDefaults persistence, so a pinged
-    /// start line survives the app being backgrounded or relaunched — the
-    /// pings are as much "in-progress course setup" as the marks are, and a
-    /// sailor closing the app mid-start-sequence shouldn't have to re-ping.
-    /// Cleared only by `clearLine()`, same as on-screen.
+    /// Mirrors `CourseStateStore`'s own UserDefaults persistence for the
+    /// committee-boat ping, so it survives the app being backgrounded or
+    /// relaunched. The pin end has no counterpart here - its position lives
+    /// on the start's own `CourseEntry` (see `pin` below), which is already
+    /// durable via `CourseStateStore.persist()`.
     private struct PersistedLine: Codable {
-        var pin: GeoMath.LatLon?
         var committee: GeoMath.LatLon?
     }
 
@@ -66,24 +63,22 @@ final class RaceViewModel {
 
     // MARK: - Start line
 
-    /// The pin end of the start line. When the course's start is a charted
-    /// mark, its position is read straight from the course rather than
-    /// waiting on a ping the mark doesn't need — the "Ping Pin" control is
-    /// hidden for the same reason. Otherwise this is whatever was last
-    /// pinged live.
+    /// The pin end of the start line - always the start's own `CourseEntry`
+    /// position, whatever it came from: a charted mark, a manual entry in
+    /// the course builder, or a live GPS ping. This used to keep a second,
+    /// view-model-only copy for a pinged start, which is why pinging it here
+    /// didn't show up in the leg navigator, the map's actual course line, or
+    /// the VMG-to-mark math - none of those read this view model, they all
+    /// read the course, so pinging anywhere now updates the one place
+    /// everything else already looks.
     var pin: GeoMath.LatLon? {
-        if courseStore.startIsChartedMark,
-           let entry = courseStore.startEntry,
-           let position = resolvedPosition(entry) {
-            return GeoMath.LatLon(lat: position.lat, lon: position.lon)
-        }
-        return pingedPin
+        guard let entry = courseStore.startEntry, let position = resolvedPosition(entry) else { return nil }
+        return GeoMath.LatLon(lat: position.lat, lon: position.lon)
     }
 
     func pingPin() {
-        guard let fix = liveStore.fix else { return }
-        pingedPin = GeoMath.LatLon(lat: fix.lat, lon: fix.lon)
-        persistLine()
+        guard let fix = liveStore.fix, let entry = courseStore.startEntry else { return }
+        courseStore.pingMark(code: entry.mark.code, lat: fix.lat, lon: fix.lon)
     }
 
     func pingCommittee() {
@@ -93,14 +88,19 @@ final class RaceViewModel {
     }
 
     func clearLine() {
-        pingedPin = nil
+        // A charted mark's position isn't something "Clear Line" should be
+        // able to erase - it stays put regardless, same reasoning as why
+        // the pin ping button is hidden for one in the first place.
+        if !courseStore.startIsChartedMark, let entry = courseStore.startEntry {
+            courseStore.clearPosition(code: entry.mark.code)
+        }
         committee = nil
         persistLine()
     }
 
     private func persistLine() {
-        let snapshot = PersistedLine(pin: pingedPin, committee: committee)
-        guard snapshot.pin != nil || snapshot.committee != nil else {
+        let snapshot = PersistedLine(committee: committee)
+        guard snapshot.committee != nil else {
             UserDefaults.standard.removeObject(forKey: Self.lineCacheKey)
             return
         }
@@ -116,7 +116,6 @@ final class RaceViewModel {
     private func restoreLine() {
         guard let data = UserDefaults.standard.data(forKey: Self.lineCacheKey),
               let saved = try? JSONDecoder().decode(PersistedLine.self, from: data) else { return }
-        pingedPin = saved.pin
         committee = saved.committee
     }
 

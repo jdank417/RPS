@@ -420,6 +420,23 @@ final class CourseStateStore {
         return true
     }
 
+    /// Clears a mark's live-pinged position, leaving the entry itself in the
+    /// course. The counterpart to `pingMark` - used by Race Mode's "Clear
+    /// Line" so un-pinging the start actually un-positions it everywhere
+    /// (the leg navigator, the map's course line, VMG-to-mark), not just in
+    /// the start-line tab.
+    func clearPosition(code: String) {
+        guard course.contains(where: { $0.mark.code == code }) else { return }
+        course = course.map { entry in
+            guard entry.mark.code == code else { return entry }
+            var updated = entry
+            updated.overrideLat = nil
+            updated.overrideLon = nil
+            return updated
+        }
+        persist()
+    }
+
     /// Sets the start at a charted (non-portable) mark. Returns false (with a
     /// status message) if the mark has no charted position.
     @discardableResult
