@@ -97,19 +97,19 @@ struct WindFlowOverlay: View {
                 with: .linearGradient(
                     Gradient(colors: [
                         Color.teal.opacity(0),
-                        Color.teal.opacity(0.5 * fade),
+                        Color.teal.opacity(0.85 * fade),
                     ]),
                     startPoint: tail,
                     endPoint: head
                 ),
-                style: StrokeStyle(lineWidth: 1.4, lineCap: .round)
+                style: StrokeStyle(lineWidth: 2, lineCap: .round)
             )
 
             // A small bright tip, so the leading end is unambiguous even
             // where streaks cross the course lines.
             context.fill(
-                Path(ellipseIn: CGRect(x: head.x - 1.2, y: head.y - 1.2, width: 2.4, height: 2.4)),
-                with: .color(Color.teal.opacity(0.7 * fade))
+                Path(ellipseIn: CGRect(x: head.x - 1.8, y: head.y - 1.8, width: 3.6, height: 3.6)),
+                with: .color(Color.teal.opacity(fade))
             )
         }
     }

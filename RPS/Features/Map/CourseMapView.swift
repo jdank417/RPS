@@ -21,6 +21,10 @@ struct CourseMapView: View {
     /// no forecast yet, which hides the wind overlay entirely rather than
     /// drawing lines pointing nowhere.
     var windFromDeg: Double? = nil
+    /// Forecast wind speed in knots, shown on the badge alongside direction.
+    /// The flowing streak overlay alone doesn't give a reliable read on
+    /// strength at a glance, especially in bright sun.
+    var windSpeedKts: Double? = nil
     /// The nearest tidal current station's current reading, when there is
     /// one close enough to be useful. Nil hides the current toggle
     /// entirely, same reasoning as `windFromDeg`.
@@ -153,9 +157,16 @@ struct CourseMapView: View {
             }
         }
         .overlay(alignment: .bottomLeading) {
-            if showCurrent, let current {
-                currentBadge(current)
+            VStack(alignment: .leading, spacing: 8) {
+                if showWind, let windFromDeg {
+                    windBadge(fromDeg: windFromDeg, speedKts: windSpeedKts)
+                }
+                if showCurrent, let current {
+                    currentBadge(current)
+                }
             }
+            .padding(.leading, 12)
+            .padding(.bottom, 8)
         }
         .overlay(alignment: .topTrailing) { mapButtons }
         .onAppear { fitIfCourseChanged() }
@@ -231,8 +242,25 @@ struct CourseMapView: View {
         }
         .padding(8)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
-        .padding(.leading, 12)
-        .padding(.bottom, 8)
+    }
+
+    /// A readable strength-and-direction readout to go with the flow
+    /// overlay - the streaks alone are easy to miss, especially in bright
+    /// sun, so this is the reliable fallback for "which way, how hard."
+    /// Same shape as `currentBadge` so the two read the same way stacked
+    /// together: the arrow points where the wind is blowing *toward* (from
+    /// windFromDeg + 180), matching the flow overlay's own convention.
+    private func windBadge(fromDeg: Double, speedKts: Double?) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "arrow.up")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.teal)
+                .rotationEffect(.degrees(fromDeg + 180 - cameraHeading))
+            Text(speedKts.map { String(format: "Wind %.0f kt", $0) } ?? "Wind")
+                .font(.caption.weight(.semibold))
+        }
+        .padding(8)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
     }
 
     private func mapButton(systemImage: String, isOn: Bool, label: String, action: @escaping () -> Void) -> some View {
@@ -300,12 +328,12 @@ struct CourseMapView: View {
     private var startLineContent: some MapContent {
         if let pin, let committee {
             MapPolyline(coordinates: [pin.coordinate, committee.coordinate])
-                .stroke(.primary, style: StrokeStyle(lineWidth: 2, dash: [1, 6]))
+                .stroke(.primary, style: StrokeStyle(lineWidth: 2.5, dash: [1, 6]))
             Annotation("Pin", coordinate: pin.coordinate) {
-                lineEndMarker(label: "Pin", systemImage: "mappin")
+                lineEndMarker(label: "Pin", systemImage: "mappin", color: .orange)
             }
             Annotation("RC", coordinate: committee.coordinate) {
-                lineEndMarker(label: "RC", systemImage: "flag.fill")
+                lineEndMarker(label: "RC", systemImage: "flag.fill", color: .blue)
             }
         }
     }
@@ -362,13 +390,24 @@ struct CourseMapView: View {
         }
     }
 
-    private func lineEndMarker(label: String, systemImage: String) -> some View {
-        VStack(spacing: 2) {
+    /// An opaque, colored, white-bordered circle rather than the old
+    /// translucent .thinMaterial one - that blended into the map itself
+    /// against water, land, or satellite imagery, which is exactly the
+    /// wrong time to lose track of the start line's two ends.
+    private func lineEndMarker(label: String, systemImage: String, color: Color) -> some View {
+        VStack(spacing: 3) {
             Image(systemName: systemImage)
-                .font(.caption.weight(.bold))
-                .padding(6)
-                .background(.thinMaterial, in: Circle())
-            Text(label).font(.caption2.weight(.semibold))
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(.white)
+                .padding(8)
+                .background(color, in: Circle())
+                .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
+            Text(label)
+                .font(.caption2.weight(.bold))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(.thinMaterial, in: Capsule())
         }
     }
 

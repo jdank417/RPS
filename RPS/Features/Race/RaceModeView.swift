@@ -157,6 +157,7 @@ struct RaceModeView: View {
             committee: race.committee,
             highlightedLegIndex: race.courseStore.currentLegIndex,
             windFromDeg: race.windService.wind?.fromDeg,
+            windSpeedKts: race.windService.wind?.speedKts,
             current: tidalService.snapshot?.current,
             allMarks: race.courseStore.activeMarks,
             bottomContentInset: computation.legs.isEmpty ? 0 : legToolbarHeight
