@@ -491,6 +491,25 @@ final class CourseStateStore {
         persist()
     }
 
+    /// Duplicates `entry`'s mark and position into a new entry at the front
+    /// of the course and makes that the start. `computeCourseLegs` always
+    /// treats `course[0]` as the line the fleet starts from, no matter which
+    /// entry `startUid` names - so tagging an existing, later entry as start
+    /// without relocating anything would leave leg 0 (and the pin position)
+    /// still reading whatever used to be first. This is the same shape
+    /// `setStartFromMark` already gives a freshly-picked charted mark;
+    /// sharing the mark's code means a later re-ping or reposition (which
+    /// applies to every entry with that code) keeps both in sync.
+    private func promoteToStart(mirroring entry: CourseEntry) {
+        uidCounter += 1
+        let started = CourseEntry(
+            uid: uidCounter, mark: entry.mark,
+            overrideLat: entry.overrideLat, overrideLon: entry.overrideLon, rounding: nil
+        )
+        course.insert(started, at: 0)
+        startUid = started.uid
+    }
+
     // MARK: - Commit
 
     /// Commits the course for plotting. Returns false (with a status
@@ -507,7 +526,7 @@ final class CourseStateStore {
         // pick, no swipe, no ping mode, and no mark named "start" either -
         // default it to the last mark rather than block on it.
         if startUid == nil, startEntry == nil, let last = course.last {
-            startUid = last.uid
+            promoteToStart(mirroring: last)
         }
         guard unplaced.isEmpty else {
             reportUnplaced()
