@@ -234,7 +234,10 @@ struct CourseBuilderView: View {
     private enum StartLineChoice: Hashable { case charted, ping }
 
     private var startLineChoice: StartLineChoice {
-        startChoiceOverride ?? (course.startIsChartedMark ? .charted : .ping)
+        // Defaults to "Charted mark" - most starts are - rather than "Ping"
+        // the moment nothing has been chosen yet. Once an actual start
+        // entry exists, this reflects what it really is.
+        startChoiceOverride ?? (course.startEntry == nil || course.startIsChartedMark ? .charted : .ping)
     }
 
     private var startLineChoiceBinding: Binding<StartLineChoice> {

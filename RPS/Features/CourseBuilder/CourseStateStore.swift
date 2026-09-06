@@ -502,6 +502,13 @@ final class CourseStateStore {
             setStatus("Add at least two marks to plot a course.", isError: true)
             return false
         }
+        // Most clubs start and finish at the same mark. If nothing has set
+        // an explicit start by the time the course is plotted - no charted
+        // pick, no swipe, no ping mode, and no mark named "start" either -
+        // default it to the last mark rather than block on it.
+        if startUid == nil, startEntry == nil, let last = course.last {
+            startUid = last.uid
+        }
         guard unplaced.isEmpty else {
             reportUnplaced()
             return false
