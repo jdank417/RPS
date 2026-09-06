@@ -328,12 +328,12 @@ struct CourseMapView: View {
     private var startLineContent: some MapContent {
         if let pin, let committee {
             MapPolyline(coordinates: [pin.coordinate, committee.coordinate])
-                .stroke(.primary, style: StrokeStyle(lineWidth: 2.5, dash: [1, 6]))
+                .stroke(.primary, style: StrokeStyle(lineWidth: 2, dash: [1, 6]))
             Annotation("Pin", coordinate: pin.coordinate) {
-                lineEndMarker(label: "Pin", systemImage: "mappin", color: .orange)
+                lineEndMarker(label: "Pin", systemImage: "mappin")
             }
             Annotation("RC", coordinate: committee.coordinate) {
-                lineEndMarker(label: "RC", systemImage: "flag.fill", color: .blue)
+                lineEndMarker(label: "RC", systemImage: "flag.fill")
             }
         }
     }
@@ -390,24 +390,13 @@ struct CourseMapView: View {
         }
     }
 
-    /// An opaque, colored, white-bordered circle rather than the old
-    /// translucent .thinMaterial one - that blended into the map itself
-    /// against water, land, or satellite imagery, which is exactly the
-    /// wrong time to lose track of the start line's two ends.
-    private func lineEndMarker(label: String, systemImage: String, color: Color) -> some View {
-        VStack(spacing: 3) {
+    private func lineEndMarker(label: String, systemImage: String) -> some View {
+        VStack(spacing: 2) {
             Image(systemName: systemImage)
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(.white)
-                .padding(8)
-                .background(color, in: Circle())
-                .overlay(Circle().strokeBorder(.white, lineWidth: 2))
-                .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
-            Text(label)
-                .font(.caption2.weight(.bold))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(.thinMaterial, in: Capsule())
+                .font(.caption.weight(.bold))
+                .padding(6)
+                .background(.thinMaterial, in: Circle())
+            Text(label).font(.caption2.weight(.semibold))
         }
     }
 
